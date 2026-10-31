@@ -353,7 +353,9 @@ dialog p { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 10px 
 @media (max-width: 600px) { .rail-navigation .rail-link { font-size: 10px; gap: 7px; } }
 #composerDock:empty, #composerDock:has(> #composerBar.d-none) { display: none; }
 .station-account .dropdown-menu { background: var(--panel); border: 1px solid var(--line); padding: 5px; border-radius: 4px; min-width: 180px; }
-.station-account .dropdown-menu button { display: block; width: 100%; text-align: left; border: 0 !important; padding: 7px 10px !important; color: var(--terminal) !important; font-size: 12px !important; }
+.station-account .dropdown-menu :is(button, a.dropdown-item) { display: block; width: 100%; text-align: left; border: 0 !important; padding: 7px 10px !important; color: var(--terminal) !important; font-size: 12px !important; line-height: 1.5; }
+.station-account .dropdown-menu a.dropdown-item { background: transparent !important; border-radius: 4px; text-decoration: none; }
+.station-account .dropdown-menu a.dropdown-item:hover { background: var(--hover) !important; color: var(--heading) !important; }
 .station-account .navbar-auth__form { display: block; margin: 0; }
 .station-account .navbar-auth__username .board-icon:last-child { width: 14px; height: 14px; flex-basis: 14px; }
 /* Bootstrap's close icon was erased by the shared button background reset. */
