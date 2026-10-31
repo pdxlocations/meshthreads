@@ -88,6 +88,26 @@ input, select, textarea, body[data-bs-theme] .form-control, body[data-bs-theme] 
 body[data-bs-theme] .form-select { background-image: none !important; appearance: auto; }
 body[data-bs-theme] .form-control:focus { background: var(--panel) !important; border-color: var(--amber) !important; }
 input::placeholder, textarea::placeholder { color: var(--muted) !important; opacity: 1; }
+/* Keep switch tracks and thumbs separate from the general text-input theme. */
+.form-switch .form-check-input {
+  appearance: none;
+  width: 42px;
+  height: 24px;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: var(--line) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='8' fill='%23fff'/%3E%3C/svg%3E") left center / 24px 24px no-repeat !important;
+  cursor: pointer;
+  transition: background-position .15s ease, background-color .15s ease;
+}
+.form-switch .form-check-input:checked {
+  background-color: var(--primary) !important;
+  background-position: right center !important;
+  border-color: var(--primary) !important;
+}
+.form-switch .form-check-input:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  .form-switch .form-check-input { transition: none; }
+}
 small, .small, .form-text, .text-muted { color: var(--muted) !important; font-size: 12px !important; }
 .text-primary, .text-info, .message .text-primary, .message .text-info { color: var(--terminal) !important; }
 code { color: var(--muted); }
