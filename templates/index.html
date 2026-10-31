@@ -3526,7 +3526,7 @@ function renderProfilesView(container) {
                 </summary>
                 <div class="profile-manager__create-body">
                     <form id="createProfileForm">
-                        <p class="text-muted">Your node ID is generated from your public key when you create the profile.</p>
+                        <p class="text-muted">Profiles are virtual nodes on the mesh. Each profile has its own identity and channels. Your node ID is generated from your public key when you create the profile.</p>
                         <div class="mb-3">
                             <label for="newLongName" class="form-label">Long Name *</label>
                             <input type="text" class="form-control" id="newLongName" required maxlength="31" title="Long name must be fewer than 32 characters.">
@@ -3591,8 +3591,8 @@ function renderManagedProfileCard(profileId, profile) {
                 <small class="text-muted profile-item__created">Created: ${escapeHtml(String(profile.created_at || '').slice(0, 10))}</small>
             </div>
             <div class="profile-item__actions">
-                <button class="btn btn-success btn-sm" type="button" data-set-profile-id="${escapeHtml(profileId)}">Activate</button>
-                <button class="btn btn-primary btn-sm" type="button" data-edit-profile-id="${escapeHtml(profileId)}">Edit</button>
+                <button class="btn btn-primary btn-sm" type="button" data-set-profile-id="${escapeHtml(profileId)}">${currentProfile?.id === profileId ? 'Deactivate' : 'Activate'}</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-edit-profile-id="${escapeHtml(profileId)}">Edit</button>
                 <button class="btn btn-danger btn-sm" type="button" data-delete-profile-id="${escapeHtml(profileId)}">Delete</button>
             </div>
         </div>
@@ -4332,6 +4332,15 @@ async function handleProfileSelectionChange() {
     if (!document.getElementById('profileSelect')?.value) await openProfilesInbox();
 }
 
+function showFirstProfileChannel() {
+    pendingChannelIndex = null;
+    pendingDmTargetNodeNum = null;
+    activeDmTargetNodeNum = null;
+    replyingToPacketId = null;
+    activeChannelIndex = getProfileChannels().length ? 0 : null;
+    setActiveChatTab('channel');
+}
+
 async function setProfile(event) {
     const clickedButton = event ? event.target : null;
     const isDesktopConnectButton = clickedButton && clickedButton.id === 'desktopConnectBtn';
@@ -4340,7 +4349,7 @@ async function setProfile(event) {
     const isConnectButton = isDesktopConnectButton || isMobileConnectButton;
     const requestedSelectId = event && event.profileSelectId ? event.profileSelectId : 'profileSelect';
     const selectedProfileId = document.getElementById(requestedSelectId)?.value || '';
-    const deactivate = clickedButton?.id === 'setProfileBtn' && selectedProfileIsActive();
+    const deactivate = (clickedButton?.id === 'setProfileBtn' && selectedProfileIsActive()) || Boolean(directProfileId && currentProfile?.id === directProfileId);
     const profileId = deactivate ? '' : directProfileId || (isDesktopConnectButton
         ? (currentProfile?.id || '')
         : (isMobileConnectButton
@@ -4396,7 +4405,8 @@ async function setProfile(event) {
         syncProfileSelectors();
         await loadDmTargets();
         await loadNodes();
-        await applyPendingChatContext();
+        if (currentProfile && !isConnectButton) showFirstProfileChannel();
+        else await applyPendingChatContext();
 
         if (data.interface_status === 'started') {
             updateInterfaceStatus('bg-success', 'Connected');
@@ -4442,6 +4452,8 @@ async function setProfile(event) {
         if (setBtn.id === 'setProfileBtn') {
             if (deactivate && !currentProfile) document.getElementById('profileSelect').value = selectedProfileId;
             updateProfileActivationButton();
+        } else if (directProfileId) {
+            setBtn.textContent = currentProfile?.id === directProfileId ? 'Deactivate' : 'Activate';
         } else {
             updateConnectButtons();
         }

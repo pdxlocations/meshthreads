@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../static/js/board.js'), 'utf8');
-const code = ['setMobileNavigation', 'handleMobileNavigationKey'].map(name => source.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0]).join('\n');
+const code = ['setMobileNavigation', 'handleMobileNavigationKey', 'handleAccountNavigationClick'].map(name => source.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0]).join('\n');
 function fixture() {
     const attrs = new Map(); let opened = false;
     const toggle = {setAttribute:(key,value)=>attrs.set(key,value),getAttribute:key=>attrs.get(key),focus:()=>{document.activeElement=toggle;}};
@@ -33,4 +33,12 @@ test('Tab stays in the open drawer and Escape closes it',()=>{
     assert.equal(f.document.activeElement,f.last);
     f.c.handleMobileNavigationKey({key:'Escape',preventDefault:()=>prevented++});
     assert.equal(prevented,3);assert.equal(f.opened,false);
+});
+
+test('tapping the account name closes the mobile drawer without moving focus away from the account menu',()=>{
+    const f=fixture();f.c.setMobileNavigation(true);
+    const accountButton={};f.document.activeElement=accountButton;
+    f.c.handleAccountNavigationClick();
+    assert.equal(f.opened,false);assert.equal(f.shell.inert,false);
+    assert.equal(f.document.activeElement,accountButton);
 });

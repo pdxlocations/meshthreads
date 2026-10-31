@@ -166,6 +166,20 @@ function handleMobileNavigationKey(event) {
     else if (!event.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement))) { event.preventDefault(); first.focus(); }
 }
 
+function handleAccountNavigationClick() {
+    if (window.matchMedia('(max-width: 600px)').matches && document.getElementById('mobileNavToggle')?.getAttribute('aria-expanded') === 'true') {
+        setMobileNavigation(false, false);
+    }
+}
+
+function renderActiveStation() {
+    const name = document.getElementById('activeStationName');
+    const button = document.getElementById('activeStationProfile');
+    if (!name || !button) return;
+    name.textContent = currentProfile?.long_name || currentProfile?.node_id || 'Activate a profile';
+    button.setAttribute('aria-label', `${currentProfile ? `Active profile: ${name.textContent}. ` : ''}Open Profiles`);
+}
+
 function installBoardLayout() {
     const shell = document.querySelector('.chat-shell-card');
     const grid = document.createElement('div');
@@ -175,7 +189,7 @@ function installBoardLayout() {
     rooms.className = 'mesh-rooms';
     rooms.id = 'boardSidebar';
     rooms.setAttribute('aria-label', 'Rooms and profile');
-    rooms.innerHTML = `<div class="mobile-nav-heading"><span>Rooms & navigation</span><button type="button" data-board-mobile-nav="close" aria-label="Close navigation">×</button></div><section class="harbor-panel profile-panel"><div class="rail-heading">Your profile</div><div id="stationSelect"></div><div id="stationConnection"></div></section>
+    rooms.innerHTML = `<div class="mobile-nav-heading"><span>Rooms & navigation</span><button type="button" data-board-mobile-nav="close" aria-label="Close navigation">×</button></div><section class="harbor-panel profile-panel"><div class="rail-heading">Active profile</div><button id="activeStationProfile" class="station-profile-link" type="button" data-board-action="profiles"><span id="activeStationName">Activate a profile</span>${boardIcon('right')}</button><div class="station-status-line"><span>Web</span><span id="stationSocketStatus"></span></div><div class="station-status-line"><span>Mesh</span><span id="stationMeshStatus"></span></div></section>
         <section class="harbor-panel rooms-panel"><div class="rail-heading rooms-heading">Rooms</div>
         <div id="boardRooms"></div><button type="button" class="rail-link rail-new-room" data-board-action="create">${boardIcon('plus')}<span>New room</span></button>
             <button type="button" class="rail-link" data-board-action="join">${boardIcon('link')}<span>Join by URL</span></button>
@@ -194,10 +208,9 @@ function installBoardLayout() {
     nodes.setAttribute('aria-label', 'Mesh nodes');
     nodes.innerHTML = `<div class="rail-heading">Mesh nodes <span id="boardNodeCount">0</span></div><div class="node-search">${boardIcon('search')}<label class="visually-hidden" for="boardNodeSearch">Search nodes</label><input id="boardNodeSearch" placeholder="Search nodes..." type="search"></div><div id="boardNodes"></div>`;
     grid.append(nodes);
-    const station = document.getElementById('stationSelect');
-    station.append(document.getElementById('profileSelect'), document.getElementById('setProfileBtn'));
-    updateProfileActivationButton();
-    document.getElementById('stationConnection').append(document.querySelector('.desktop-status-lights'), document.getElementById('desktopConnectBtn'));
+    // Keep legacy controls in their hidden sheet for existing profile workflows.
+    document.getElementById('stationSocketStatus').append(document.getElementById('connectionStatusMobile'));
+    document.getElementById('stationMeshStatus').append(document.getElementById('interfaceStatusMobile'));
     const accountButton = document.querySelector('.navbar-auth__username');
     const logoutForm = document.querySelector('.navbar-auth__form');
     if (accountButton && logoutForm) {
@@ -208,6 +221,7 @@ function installBoardLayout() {
         accountButton.setAttribute('data-bs-toggle', 'dropdown');
         accountButton.setAttribute('data-bs-display', 'static');
         accountButton.setAttribute('aria-expanded', 'false');
+        accountButton.addEventListener('click', handleAccountNavigationClick);
         accountButton.insertAdjacentHTML('afterbegin', boardIcon('user'));
         accountButton.insertAdjacentHTML('beforeend', boardIcon('down'));
         menu.append(accountButton);
@@ -233,6 +247,7 @@ function installBoardLayout() {
 }
 
 function renderBoardRails() {
+    renderActiveStation();
     updateProfileActivationButton();
     if (!document.getElementById('boardRooms')) return;
     const channels = getProfileChannels();

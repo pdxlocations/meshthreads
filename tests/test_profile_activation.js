@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const template = fs.readFileSync(require('node:path').join(__dirname, '../templates/index.html'), 'utf8');
-const code = ['selectedProfileIsActive', 'updateProfileActivationButton', 'handleProfileSelectionChange', 'setProfile'].map(name => template.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`))[0]).join('\n');
+const code = ['selectedProfileIsActive', 'updateProfileActivationButton', 'handleProfileSelectionChange', 'showFirstProfileChannel', 'setProfile'].map(name => template.match(new RegExp(`(?:async )?function ${name}\\([^]*?\\n\\}`))[0]).join('\n');
 function fixture(selected, active) {
     const button = {id: 'setProfileBtn', disabled: false, dataset: {}};
     const select = {value: selected};
@@ -52,4 +52,42 @@ test('placeholder opens Profiles without unsetting the active profile or posting
         assert.equal(button.disabled, false);
         assert.equal(button.textContent, 'Activate');
     }
+});
+
+test('profile cards can deactivate the active identity after removing the sidebar picker', async () => {
+    const {c, requests} = fixture('a', 'a');
+    const button = {id: '', dataset: {setProfileId: 'a'}, disabled: false};
+    await c.setProfile({target: button});
+    assert.equal(requests[0][1].profile_id, null);
+    assert.equal(button.textContent, 'Deactivate'); // Failed request restores its real state.
+});
+test('Activate is primary and Edit is neutral on profile cards', () => {
+    const {c} = fixture('a', 'a');
+    c.escapeHtml = String;
+    vm.runInContext(template.match(/function renderManagedProfileCard\([^]*?\n\}/)[0], c);
+    const html = c.renderManagedProfileCard('b', {long_name:'Other profile'});
+    assert.match(html, /class="btn btn-primary btn-sm"[^>]*data-set-profile-id="b">Activate/);
+    assert.match(html, /class="btn btn-outline-secondary btn-sm"[^>]*data-edit-profile-id="b">Edit/);
+    assert.match(c.renderManagedProfileCard('a', {}), /data-set-profile-id="a">Deactivate/);
+});
+
+test('successful profile activation opens first channel instead of preserving Profiles, a DM, or a later room', async () => {
+    const {c, button} = fixture('b', 'a');
+    let selectedTab;
+    Object.assign(c, {
+        activeChatTab:'profiles', activeChannelIndex:2, pendingChannelIndex:2, pendingDmTargetNodeNum:7, activeDmTargetNodeNum:7, replyingToPacketId:99,
+        socket:null, getProfileChannels:()=>[{name:'First'},{name:'Second'}], setActiveChatTab:tab=>{selectedTab=tab;},
+        fetch:async()=>({ok:true,json:async()=>({profile:{id:'b'},selected_channel_index:0,channel_number:15,interface_status:'stopped'})}),
+        leaveCurrentChannelRoom(){},leaveCurrentProfileRoom(){},applyUnreadState(){},updateProfileBanner(){},syncProfileSelectors(){},
+        loadDmTargets:async()=>{},loadNodes:async()=>{},applyPendingChatContext:async()=>{throw new Error('Old chat context should not be restored');},
+        updateInterfaceStatus(){},renderActiveMessages(){},closeProfileSelector(){},
+    });
+    await c.setProfile({target:button});
+    assert.equal(c.currentProfile.id,'b');
+    assert.equal(selectedTab,'channel');
+    assert.equal(c.activeChannelIndex,0);
+    assert.equal(c.activeDmTargetNodeNum,null);
+    assert.equal(c.pendingDmTargetNodeNum,null);
+    assert.equal(c.pendingChannelIndex,null);
+    assert.equal(c.replyingToPacketId,null);
 });

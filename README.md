@@ -55,7 +55,7 @@ profile identities, private keys, or `.env` files were copied.
   for transmission; check its ACK/delivery status in DMs.
 
 On narrower screens the node rail is hidden; **Nodes** still provides the node
-list and invitation controls. On phones, Rooms & navigation opens a compact drawer so the board uses the full screen width.
+list and invitation controls. On phones, Rooms & navigation opens a compact drawer so the board uses the full screen width. The sidebar shows the active profile and Web/Mesh status; tap the profile name to open Profiles. Activation and deactivation live on profile cards, with the accent-colored action. Activating a profile opens its first channel. Login automatically activates the profile and opens messages when the account has exactly one profile; other accounts open Profiles. Tapping the header account name closes the mobile drawer.
 
 The compact Harbor interface uses locally bundled Nunito Sans, soft blue-gray panels and teal accents, with profile and room panels on the left, inline threads in the center, and nodes on the right. Use the sun/moon icon to the left of your user menu to switch between light and dark modes. Your choice is remembered in this browser. Bootstrap, Socket.IO client, and Leaflet retain Firefly’s CDN
 loading requirements.

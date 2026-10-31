@@ -2200,6 +2200,11 @@ def login():
     _unregister_current_session_transport()
     _clear_session_user()
     _set_session_user(user)
+    profiles = profile_manager.get_all_profiles(user_id=user["id"])
+    if len(profiles) == 1:
+        _set_session_profile(next(iter(profiles.values())))
+        _set_session_channel_index(0)
+        redirect_target = url_for("index", channel=0)
     if is_async_request:
         return jsonify({"redirect_url": redirect_target})
     return redirect(redirect_target)

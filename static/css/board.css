@@ -742,3 +742,17 @@ body[data-bs-theme] .station-account > .dropdown-menu {
   .navbar-auth .station-account { max-width: 135px; }
   body[data-bs-theme] .navbar-auth__username { max-width: 100%; }
 }
+/* A profile summary in navigation; activation lives on the Profiles page. */
+.station-profile-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 5px 0; border: 0 !important; color: var(--heading) !important; font-size: 15px; font-weight: 600 !important; }
+#activeStationName { min-width: 0; overflow-wrap: anywhere; }
+.station-profile-link .board-icon { width: 15px; height: 15px; flex-basis: 15px; color: var(--muted); }
+.station-status-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.station-status-line .badge { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent !important; color: var(--terminal) !important; font-size: 11px; white-space: normal; text-align: right; }
+.station-status-line .badge::before { content: ''; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--muted); }
+.station-status-line .badge.bg-success::before { background: #39966d; }
+.station-status-line .badge.bg-warning::before { background: #b58a39; }
+.station-status-line .badge.bg-danger::before { background: var(--danger); }
+@media (max-width: 600px) {
+  .station-profile-link { font-size: 14px; min-height: 34px; }
+  .profile-item__actions [data-set-profile-id], .profile-item__actions [data-edit-profile-id] { min-height: 36px; }
+}
