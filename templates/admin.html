@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}MeshThreads / Admin{% endblock %}
+{% block content %}
+<main class="admin-dashboard">
+    <div class="admin-title"><div><h1>Administration</h1><p>Accounts, virtual nodes, and server activity.</p></div><a class="btn" href="/">Back to messages</a></div>
+    <div id="adminNotice" role="status" aria-live="polite"></div>
+    <section id="adminTotals" class="admin-stats" aria-label="Server statistics"></section>
+    <section class="harbor-panel admin-network"><h2>Radio receiver</h2><div id="adminReceiver"></div><p class="form-text">Packet counters start when the server starts. Message totals count stored messages; shared room messages can appear in several profiles.</p></section>
+    <section class="harbor-panel"><div class="admin-title"><h2>Users & profiles</h2><label>Find a user <input id="adminSearch" type="search" placeholder="Username…"></label><button type="button" id="adminRefresh">Refresh</button></div>
+    <p class="form-text">Active means a browser heartbeat within 90 seconds. Idle sessions may still be signed in. Login time counts observed browser activity, including background tabs; offline gaps are capped at 90 seconds. Tracking starts with this update.</p>
+    <div id="adminUsers" aria-live="polite">Loading users…</div></section>
+    <p id="adminUpdated" class="form-text"></p>
+</main>
+<script defer src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

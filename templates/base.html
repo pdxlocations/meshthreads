@@ -909,6 +909,9 @@
                     >
                         {{ current_user.username }}
                     </button>
+                    {% if current_user.is_admin %}
+                    <a id="adminMenuLink" class="dropdown-item" href="{{ url_for('admin_page') }}" hidden>Admin</a>
+                    {% endif %}
                     <form method="post" action="{{ url_for('logout') }}" class="navbar-auth__form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button class="btn btn-outline-light btn-sm navbar-auth__button" type="submit">Logout</button>
@@ -935,6 +938,7 @@
     </div>
 
     {% if current_user %}
+        <script defer src="{{ url_for('static', filename='js/session-activity.js') }}"></script>
         <div class="modal fade" id="accountModal" tabindex="-1" aria-labelledby="accountModalLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">

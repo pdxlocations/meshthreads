@@ -189,7 +189,7 @@ function installBoardLayout() {
     rooms.className = 'mesh-rooms';
     rooms.id = 'boardSidebar';
     rooms.setAttribute('aria-label', 'Rooms and profile');
-    rooms.innerHTML = `<div class="mobile-nav-heading"><span>Rooms & navigation</span><button type="button" data-board-mobile-nav="close" aria-label="Close navigation">×</button></div><section class="harbor-panel profile-panel"><div class="rail-heading">Active profile</div><button id="activeStationProfile" class="station-profile-link" type="button" data-board-action="profiles"><span id="activeStationName">Activate a profile</span>${boardIcon('right')}</button><div class="station-status-line"><span>Web</span><span id="stationSocketStatus"></span></div><div class="station-status-line"><span>Mesh</span><span id="stationMeshStatus"></span></div></section>
+    rooms.innerHTML = `<div class="mobile-nav-heading"><span>Rooms & navigation</span><button type="button" data-board-mobile-nav="close" aria-label="Close navigation">×</button></div><section class="harbor-panel profile-panel"><button id="activeStationProfile" class="station-profile-link" type="button" data-board-action="profiles"><span id="activeStationName">Activate a profile</span>${boardIcon('right')}</button><div class="station-status-line"><span>Web</span><span id="stationSocketStatus"></span></div><div class="station-status-line"><span>Mesh</span><span id="stationMeshStatus"></span></div></section>
         <section class="harbor-panel rooms-panel"><div class="rail-heading rooms-heading">Rooms</div>
         <div id="boardRooms"></div><button type="button" class="rail-link rail-new-room" data-board-action="create">${boardIcon('plus')}<span>New room</span></button>
             <button type="button" class="rail-link" data-board-action="join">${boardIcon('link')}<span>Join by URL</span></button>
@@ -227,6 +227,11 @@ function installBoardLayout() {
         menu.append(accountButton);
         menu.insertAdjacentHTML('beforeend', '<div class="dropdown-menu dropdown-menu-end"><button type="button" class="dropdown-item" data-board-action="profiles">Profiles</button><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#accountModal">Account settings</button></div>');
         menu.querySelector('.dropdown-menu').append(logoutForm);
+        const adminLink = document.getElementById('adminMenuLink');
+        if (adminLink) {
+            menu.querySelector('.dropdown-menu').insertBefore(adminLink, logoutForm);
+            adminLink.hidden = false;
+        }
     }
 
     const messages = document.getElementById('messagesContainer');

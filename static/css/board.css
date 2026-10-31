@@ -89,9 +89,24 @@ body[data-bs-theme] .form-select { background-image: none !important; appearance
 body[data-bs-theme] .form-control:focus { background: var(--panel) !important; border-color: var(--amber) !important; }
 input::placeholder, textarea::placeholder { color: var(--muted) !important; opacity: 1; }
 /* Keep switch tracks and thumbs separate from the general text-input theme. */
+.notification-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+}
 .form-switch .form-check-input {
   appearance: none;
+  float: none;
+  margin: 0;
+  flex: 0 0 42px;
   width: 42px;
+  min-width: 42px;
   height: 24px;
   padding: 0 !important;
   border-radius: 999px !important;
@@ -782,3 +797,34 @@ button.map-node-directory-link { display: inline-flex; align-items: center; min-
 #nodeMap .leaflet-popup-content-wrapper, #nodeMap .leaflet-popup-tip { background: var(--panel); color: var(--terminal); }
 #nodeMap .leaflet-popup-content { font-family: inherit; font-size: 13px; }
 #nodeMap .leaflet-popup-close-button { color: var(--muted); }
+
+/* Administration uses the same compact Harbor surfaces as the board. */
+.admin-dashboard { max-width: 1200px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; }
+.admin-title, .admin-user-header, .admin-user-summary, .admin-profile { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.admin-title { justify-content: space-between; }
+.admin-title h1 { font-size: 25px; margin: 0; }
+.admin-title p { margin: 4px 0 0; }
+.admin-dashboard h2 { font-size: 19px; margin: 0; }
+.admin-dashboard h3 { font-size: 17px; margin: 0; }
+.admin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 8px; }
+.admin-stat { display: grid; gap: 2px; padding: 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); }
+.admin-stat strong { color: var(--heading); font-size: 23px; }
+.admin-stat span, .admin-user-summary { color: var(--muted); font-size: 12px; }
+.admin-network { display: grid; gap: 10px; }
+.admin-network p { margin: 0; }
+.admin-user { border-top: 1px solid var(--line); padding: 12px 0; }
+.admin-user-header button { margin-left: auto; }
+.admin-user-summary { margin: 7px 0; }
+.admin-profile { padding: 7px 0; }
+.admin-profile > div { flex: 1; min-width: 160px; }
+.admin-profile small { display: block; }
+.admin-user .badge { background: var(--selection); color: var(--heading); }
+.admin-session-list { display: grid; gap: 7px; padding-top: 8px; }
+.admin-session { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px; background: var(--selection); border-radius: 6px; font-size: 12px; }
+.admin-user summary { cursor: pointer; color: var(--amber); }
+#adminNotice:not(:empty) { padding: 8px; border: 1px solid var(--amber); border-radius: 6px; }
+@media (max-width: 600px) {
+  .admin-dashboard { padding: 8px; }
+  .admin-dashboard input { font-size: 16px; }
+  .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

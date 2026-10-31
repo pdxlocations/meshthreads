@@ -2,6 +2,7 @@
 
 import base64
 import secrets
+import time
 from runtime_files import session_secret
 from local_deps import bootstrap_local_dependency
 
@@ -74,6 +75,7 @@ _RECEIVE_INBOUND_PORTS = Counter()
 _RECEIVE_LOOPBACK_PORTS = Counter()
 _RECEIVE_LAST_PACKET_AT = None
 _RECEIVE_LAST_ERROR = None
+_SERVER_STARTED_AT = time.time()
 
 # Initialize database with environment variable path for Docker persistence
 db_path = os.getenv('FIREFLY_DATABASE_FILE', 'firefly.db')
@@ -111,6 +113,8 @@ def _set_session_profile(profile):
     if not has_request_context():
         return
     session["current_profile"] = profile
+    if session.get('activity_session_id') and session.get('user_id'):
+        db.touch_web_session(session['activity_session_id'], session['user_id'], profile.get('id') if profile else None)
 
 
 def _clear_session_profile():
@@ -119,6 +123,8 @@ def _clear_session_profile():
         return
     session.pop("current_profile", None)
     session.pop("current_channel_index", None)
+    if session.get('activity_session_id') and session.get('user_id'):
+        db.touch_web_session(session['activity_session_id'], session['user_id'], None)
 
 
 def _get_session_channel_index():
@@ -152,11 +158,20 @@ def _set_session_user(user):
     if not has_request_context():
         return
     session["user_id"] = user["id"]
+    db.bootstrap_admin(user["id"])
+    session["activity_session_id"] = str(uuid.uuid4())
+    session["activity_last_touch"] = time.time()
+    db.start_web_session(session["activity_session_id"], user["id"])
 
 
 def _clear_session_user():
     if not has_request_context():
         return
+    if session.get("activity_session_id") and session.get("user_id"):
+        profile = session.get("current_profile") or {}
+        db.touch_web_session(session["activity_session_id"], session["user_id"], profile.get("id"), end=True)
+    session.pop("activity_session_id", None)
+    session.pop("activity_last_touch", None)
     session.pop("user_id", None)
     _clear_session_profile()
 
@@ -1735,6 +1750,86 @@ def service_worker():
     return response
 
 
+@app.before_request
+def track_browser_activity():
+    if request.endpoint in {'static', 'service_worker'} or not session.get('user_id'):
+        return
+    user = _get_session_user()
+    if not user:
+        return
+    now = time.time()
+    if session.get('activity_session_id') and now - session.get('activity_last_touch', 0) < 25:
+        return
+    profile = _get_session_profile()
+    profile_id = profile.get('id') if profile else None
+    tracked = session.get('activity_session_id')
+    if not tracked or not db.touch_web_session(tracked, user['id'], profile_id):
+        tracked = str(uuid.uuid4())
+        session['activity_session_id'] = tracked
+        db.start_web_session(tracked, user['id'], profile_id)
+    session['activity_last_touch'] = now
+
+
+@app.route('/api/session-heartbeat', methods=['POST'])
+@login_required
+def session_heartbeat():
+    return jsonify(ok=True)
+
+
+def admin_required(view):
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        if not _get_session_user().get('is_admin'):
+            if _wants_json_response():
+                return jsonify(error='Admin access required'), 403
+            return 'Admin access required', 403
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.route('/admin')
+@admin_required
+def admin_page():
+    return render_template('admin.html')
+
+
+@app.route('/api/admin/overview')
+@admin_required
+def admin_overview():
+    result = db.admin_overview()
+    with _RECEIVE_LOCK:
+        result['receiver'] = {
+            'packets': _RECEIVE_COUNTS.get('packets', 0),
+            'inbound': _RECEIVE_COUNTS.get('inbound_packets', 0),
+            'local_echoes': _RECEIVE_COUNTS.get('local_echoes', 0),
+            'undecodable': _RECEIVE_COUNTS.get('undecodable_packets', 0),
+            'listener_errors': _RECEIVE_COUNTS.get('listener_errors', 0),
+            'last_packet_at': _RECEIVE_LAST_PACKET_AT,
+            'started_at': _SERVER_STARTED_AT,
+        }
+    active = udp_server.get_active_profile()
+    result['transport'] = {'running': bool(udp_server.running), 'profile_id': active.get('id') if active else None}
+    response = jsonify(result)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.route('/api/admin/users/<user_id>/admin', methods=['PUT'])
+@admin_required
+def update_admin_role(user_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or type(data.get('is_admin')) is not bool:
+        return jsonify(error='is_admin must be true or false'), 400
+    result = db.set_user_admin(_get_session_user()['id'], user_id, data['is_admin'])
+    errors = {'forbidden': ('Admin access required', 403), 'missing': ('User not found', 404),
+              'last_admin': ('Keep at least one admin. Add another admin before removing this role.', 409)}
+    if result in errors:
+        message, code = errors[result]
+        return jsonify(error=message), code
+    return jsonify(ok=True)
+
+
 @app.context_processor
 def inject_versions():
     return {
@@ -2304,13 +2399,12 @@ def delete_account():
         flash("Current password is incorrect.", "error")
         return redirect(url_for("index"))
 
-    _unregister_current_session_transport()
-    _clear_session_user()
-
     if not db.delete_user(current_user["id"]):
-        flash("Unable to delete account.", "error")
+        flash("Unable to delete account. If you are the last admin, assign another admin first.", "error")
         return redirect(url_for("index"))
 
+    _unregister_current_session_transport()
+    _clear_session_user()
     flash("Account deleted.", "success")
     return redirect(url_for("index"))
 

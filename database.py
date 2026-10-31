@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sqlite3
+from administration import Administration, initialize_admin_schema
 from runtime_files import database_connection
 import json
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ logger = get_logger("firefly.db")
 print = make_log_print(logger)
 
 
-class Database:
+class Database(Administration):
     def __init__(self, db_path: str = "firefly.db"):
         self.db_path = db_path
         self.init_database()
@@ -23,6 +24,7 @@ class Database:
         """Initialize the database with required tables"""
         with database_connection(self.db_path) as conn:
             conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("BEGIN IMMEDIATE")
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -41,6 +43,8 @@ class Database:
                     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
                 )
             """)
+
+            initialize_admin_schema(conn)
 
             # Profiles table (migrate from JSON file)
             conn.execute("""
@@ -367,7 +371,7 @@ class Database:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
-                SELECT id, username, password_hash, created_at
+                SELECT id, username, password_hash, created_at, is_admin
                 FROM users
                 WHERE username = ? COLLATE NOCASE
                 """,
@@ -381,6 +385,7 @@ class Database:
                 "username": row["username"],
                 "password_hash": row["password_hash"],
                 "created_at": row["created_at"],
+                "is_admin": bool(row["is_admin"]),
             }
 
     def get_user_by_id(self, user_id: str) -> Optional[Dict]:
@@ -388,7 +393,7 @@ class Database:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 """
-                SELECT id, username, password_hash, created_at
+                SELECT id, username, password_hash, created_at, is_admin
                 FROM users
                 WHERE id = ?
                 """,
@@ -402,6 +407,7 @@ class Database:
                 "username": row["username"],
                 "password_hash": row["password_hash"],
                 "created_at": row["created_at"],
+                "is_admin": bool(row["is_admin"]),
             }
 
     def count_users(self) -> int:
@@ -430,6 +436,10 @@ class Database:
         try:
             with database_connection(self.db_path) as conn:
                 conn.execute("PRAGMA foreign_keys = ON")
+                conn.execute("BEGIN IMMEDIATE")
+                target = conn.execute("SELECT is_admin FROM users WHERE id=?", (user_id,)).fetchone()
+                if target and target[0] and conn.execute("SELECT COUNT(*) FROM users WHERE is_admin=1").fetchone()[0] <= 1:
+                    return False
                 conn.execute(
                     """
                     DELETE FROM messages

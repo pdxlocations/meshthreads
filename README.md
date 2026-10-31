@@ -4,6 +4,14 @@ A threaded message board for Meshtastic. Rooms have their own conversations, rep
 
 Built from [Firefly](https://github.com/pdxlocations/firefly), using its Flask, Socket.IO, SQLite, vnode, meshdb, and UDP multicast backend. The Harbor interface has light and dark modes, compact desktop panels, and a full-width mobile board.
 
+## Administration
+
+The first account to sign in on a fresh installation becomes an admin (creating an account also signs it in). On an existing installation, the oldest account becomes the initial admin when this update is first started. Admins see **Admin** in the user menu, opening `/admin`.
+
+The dashboard lists all users and their profiles, active or idle browser sessions, observed login time, messages received/sent, the active radio profile, and receiver statistics. It refreshes every 30 seconds. Admins can grant or remove admin access; the last admin cannot lose the role or delete their account until another admin is assigned. Admin routes enforce permissions on every request.
+
+Session tracking begins with this update and persists across restarts. A browser is active when its heartbeat was received in the last 90 seconds. Background tabs count as connected time; gaps without heartbeats count at most 90 seconds, so login time is an estimate. Packet counters cover the current server run. Message totals count retained database messages; shared room receives are counted for each subscribed profile. Password hashes, PSKs, session tokens, and message contents are excluded from admin reports.
+
 ## Screenshots
 
 Actual app captures using fictional sample messages, nodes, and telemetry. The sample mesh transport is stopped; these images do not represent live radio delivery.
