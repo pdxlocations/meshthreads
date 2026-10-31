@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="MeshThreads">
+  
+  <path d="M 19,12 L 37,12 Q 43,12 43,18 L 43,31 Q 43,37 37,37 L 23,37 L 13,45 L 13,18 Q 13,12 19,12 Z" fill="none" stroke="#2c9dac" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M 32,27 L 47,27 Q 53,27 53,33 L 53,53 L 44,46 L 32,46 Q 26,46 26,40 L 26,33 Q 26,27 32,27 Z" fill="#e8eff0" stroke="#345d72" stroke-width="5" stroke-linejoin="round"/>
+</svg>

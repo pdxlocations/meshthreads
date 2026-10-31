@@ -1,0 +1,5219 @@
+{% extends "base.html" %}
+
+{% block title %}MeshThreads / Board{% endblock %}
+{% block body_class %}mobile-fixed-nav-page{% endblock %}
+{% block head_extra %}
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="offcanvas offcanvas-bottom profile-selector-sheet" tabindex="-1" id="mobileSettingsSheet" aria-labelledby="mobileSettingsSheetLabel">
+        <div class="offcanvas-header">
+            <div>
+                <h5 class="offcanvas-title mb-0" id="mobileSettingsSheetLabel">Profiles</h5>
+                <small class="text-muted">Profiles and connection status</small>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="mb-3">
+                <label for="profileSelect" class="form-label small text-uppercase text-muted">Profile</label>
+                <div class="d-flex gap-2 align-items-center">
+                    <select id="profileSelect" class="form-select">
+                        <option value="">Select profile...</option>
+                        {% for profile_id, profile in profiles.items() %}
+                            <option value="{{ profile_id }}" {{ 'selected' if current_profile and current_profile.id == profile_id else '' }}>
+                                {{ profile.long_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <button id="setProfileBtn" class="btn btn-primary" type="button">Activate</button>
+                </div>
+            </div>
+            <div class="profile-selector-status mb-3">
+                <div class="profile-selector-status__row">
+                    <span class="profile-selector-status__label">WebSocket</span>
+                    <span id="connectionStatusMobile" class="badge bg-secondary profile-selector-status__badge">Connecting...</span>
+                </div>
+                <div class="profile-selector-status__row">
+                    <span class="profile-selector-status__label">Mesh Interface</span>
+                    <span id="interfaceStatusMobile" class="badge bg-warning profile-selector-status__badge">Not Started</span>
+                </div>
+            </div>
+            <button id="manageProfilesBtn" class="btn w-100 profile-selector-manage-link" type="button">Manage Profiles</button>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="card chat-shell-card" style="overflow: hidden;">
+            <div class="card-body p-0 d-flex flex-column" style="height: 100%;">
+                <div class="desktop-chat-header d-none d-md-flex border-bottom px-4 py-3">
+                    <div>
+                        <div class="fw-semibold" id="desktopProfileName">No Profile Selected</div>
+                        <div class="small text-muted" id="desktopProfileSubline"></div>
+                    </div>
+                    <div class="desktop-connect-panel">
+                        <div class="desktop-status-lights" aria-label="Connection status">
+                            <span class="desktop-status-light is-idle" id="desktopSocketLight" title="WebSocket"></span>
+                            <span class="desktop-status-light is-warning" id="desktopInterfaceLight" title="Mesh interface"></span>
+                        </div>
+                        <button id="desktopConnectBtn" class="btn btn-sm btn-outline-primary" type="button">Reconnect</button>
+                    </div>
+                </div>
+                <div class="mobile-chat-header d-md-none border-bottom px-3 py-2">
+                    <div class="mobile-chat-header__top">
+                        <div class="mobile-chat-brand">
+                            <img id="mobile-logo-dark" src="{{ url_for('static', filename='images/firefly-logo-dark.png') }}" alt="MeshThreads" height="22">
+                            <img id="mobile-logo-light" src="{{ url_for('static', filename='images/firefly-logo-light.png') }}" alt="MeshThreads" height="22">
+                            <span>MeshThreads</span>
+                        </div>
+                        {% if current_user %}
+                            <div class="mobile-chat-auth">
+                                <button
+                                    class="mobile-chat-auth__username account-trigger"
+                                    type="button"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#accountModal"
+                                >
+                                    {{ current_user.username }}
+                                </button>
+                                <form method="post" action="{{ url_for('logout') }}" class="mobile-chat-auth__form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="btn btn-outline-primary btn-sm mobile-chat-auth__button" type="submit" aria-label="Logout" title="Logout">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                            <path d="M16 17l5-5-5-5"></path>
+                                            <path d="M21 12H9"></path>
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="mobile-chat-header__main">
+                        <div class="mobile-chat-profile">
+                            <div class="fw-semibold" id="mobileProfileName">No Profile Selected</div>
+                            <div class="small text-muted" id="mobileProfileSubline"></div>
+                        </div>
+                        <div class="mobile-connect-panel">
+                            <div class="mobile-status-lights" aria-label="Connection status">
+                                <span class="mobile-status-light is-idle" id="mobileSocketLight" title="WebSocket"></span>
+                                <span class="mobile-status-light is-warning" id="mobileInterfaceLight" title="Mesh interface"></span>
+                            </div>
+                            <button id="mobileConnectBtn" class="btn btn-sm btn-outline-primary" type="button">Reconnect</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="chatTabBar" class="border-bottom px-3 pt-3 pb-2">
+                    <div class="d-flex flex-column gap-2">
+                        <ul class="nav nav-tabs card-header-tabs" id="chatTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active chat-tab-button" id="channelTabBtn" type="button" data-chat-tab="channel">
+                                    <span>Channels</span>
+                                    <span id="channelTabBadge" class="chat-tab-badge d-none" aria-label="Unread channel messages">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link chat-tab-button" id="dmTabBtn" type="button" data-chat-tab="dm">
+                                    <span>DMs</span>
+                                    <span id="dmTabBadge" class="chat-tab-badge d-none" aria-label="Unread direct messages">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="nodesTabBtn" type="button">Nodes</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="mapTabBtn" type="button">Map</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="desktopProfilesTabBtn" type="button">Profiles</button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div id="messagesContainer" class="flex-grow-1 p-3" style="overflow-y: auto; overflow-x: hidden; min-height: 200px;">
+                    <!-- Messages will be populated here -->
+                </div>
+                
+                <div id="composerBar" class="p-3" style="border-top: 1px solid var(--bs-border-color-translucent);">
+                    <div id="replyComposerBar" class="alert alert-secondary py-2 px-3 mb-2 d-none">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div class="small">
+                                <div class="fw-semibold">Replying to <span id="replyComposerAuthor">message</span></div>
+                                <div id="replyComposerPreview" class="text-muted"></div>
+                            </div>
+                            <button id="cancelReplyBtn" class="btn btn-sm btn-outline-secondary" type="button">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="input-group mb-2">
+                        <textarea id="messageInput" class="form-control" placeholder="Type a channel message..." maxlength="220" rows="2" style="resize: none;"></textarea>
+                        <button id="sendBtn" class="btn btn-primary" type="button">Send</button>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="form-text">Press Enter to send, Shift+Enter for new line.</div>
+                        <small class="text-muted" id="charCount">0/220</small>
+                    </div>
+                </div>
+                <div class="mobile-bottom-nav d-md-none">
+                    <button id="mobileChannelsBtn" class="mobile-bottom-nav__button active" type="button">
+                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 7h16"></path>
+                                <path d="M7 12h10"></path>
+                                <path d="M10 17h4"></path>
+                            </svg>
+                            <span id="mobileChannelsBadge" class="chat-tab-badge chat-tab-badge--mobile mobile-bottom-nav__badge d-none" aria-label="Unread channel messages">0</span>
+                        </span>
+                        <span class="mobile-bottom-nav__text">Channels</span>
+                    </button>
+                    <button id="mobileDmsBtn" class="mobile-bottom-nav__button" type="button">
+                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            <span id="mobileDmsBadge" class="chat-tab-badge chat-tab-badge--mobile mobile-bottom-nav__badge d-none" aria-label="Unread direct messages">0</span>
+                        </span>
+                        <span class="mobile-bottom-nav__text">DMs</span>
+                    </button>
+                    <button id="mobileNodesBtn" class="mobile-bottom-nav__button" type="button">
+                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="6" r="2"></circle>
+                                <circle cx="6" cy="18" r="2"></circle>
+                                <circle cx="18" cy="18" r="2"></circle>
+                                <path d="M12 8v4"></path>
+                                <path d="M10.5 13 7.5 16"></path>
+                                <path d="M13.5 13 16.5 16"></path>
+                            </svg>
+                        </span>
+                        <span>Nodes</span>
+                    </button>
+                    <button id="mobileMapBtn" class="mobile-bottom-nav__button" type="button">
+                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20V6.5Z"></path>
+                                <path d="M9 4v13.5"></path>
+                                <path d="M15 6.5V20"></path>
+                            </svg>
+                        </span>
+                        <span>Map</span>
+                    </button>
+                    <button id="mobileProfilesBtn" class="mobile-bottom-nav__button" type="button">
+                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </span>
+                        <span>Profiles</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="tracerouteModal" tabindex="-1" aria-labelledby="tracerouteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="tracerouteModalLabel">Traceroute</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="tracerouteContent"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editProfileModal" tabindex="-1" aria-labelledby="editProfileModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editProfileModalLabel">Edit Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editProfileForm">
+                    <input type="hidden" id="editProfileId">
+                    <div class="mb-3">
+                        <label for="editNodeId" class="form-label">Node ID</label>
+                        <input type="text" class="form-control" id="editNodeId" readonly aria-describedby="editIdentityHelp">
+                        <div id="editIdentityHelp" class="form-text">Derived from your public key. Editing this profile preserves its identity.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editLongName" class="form-label">Long Name *</label>
+                        <input type="text" class="form-control" id="editLongName" required maxlength="31" title="Long name must be fewer than 32 characters.">
+                        <div class="form-text">Must be fewer than 32 characters.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editShortName" class="form-label">Short Name *</label>
+                        <input type="text" class="form-control" id="editShortName" required maxlength="4" title="Use 1 emoji without modifiers or 1-4 letters/numbers.">
+                        <div class="form-text">Use 1 emoji without modifiers or 1-4 letters/numbers.</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0">Channels *</label>
+                            <button class="btn btn-sm btn-outline-secondary" id="addEditChannelBtn" type="button">Add Channel</button>
+                        </div>
+                        <div id="editChannelsList" class="channel-editor-list"></div>
+                        <div class="form-text">Each channel needs a name and key.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editHopLimit" class="form-label">Hop Limit</label>
+                        <input type="number" class="form-control" id="editHopLimit" min="0" max="7" value="3" placeholder="0-7">
+                        <div class="form-text">Number of hops a message can travel (0-7). Default is 3.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveProfileBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+:root {
+    --firefly-chat-accent: #1f5d96;
+    --firefly-chat-accent-strong: #17476f;
+    --firefly-chat-accent-soft: #d8e7f4;
+    --firefly-chat-surface: rgba(255, 255, 255, 0.92);
+    --firefly-chat-surface-muted: rgba(244, 248, 251, 0.9);
+    --firefly-chat-border: rgba(175, 191, 205, 0.68);
+}
+
+[data-bs-theme="dark"] {
+    --firefly-chat-accent: #68a6de;
+    --firefly-chat-accent-strong: #87bae8;
+    --firefly-chat-accent-soft: rgba(70, 108, 142, 0.35);
+    --firefly-chat-surface: rgba(18, 31, 45, 0.9);
+    --firefly-chat-surface-muted: rgba(24, 38, 55, 0.92);
+    --firefly-chat-border: rgba(71, 97, 123, 0.9);
+}
+
+.text-primary {
+    color: var(--firefly-chat-accent) !important;
+}
+
+.bg-primary,
+.badge.bg-primary {
+    background-color: var(--firefly-chat-accent) !important;
+}
+
+.btn-primary {
+    background: var(--firefly-chat-accent) !important;
+    border-color: var(--firefly-chat-accent) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background: var(--firefly-chat-accent-strong) !important;
+    border-color: var(--firefly-chat-accent-strong) !important;
+}
+
+/* Message text wrapping and overflow prevention */
+#messagesContainer {
+    overflow-x: hidden !important;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    position: relative;
+}
+
+.message {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 0.7rem 0.8rem;
+    background: var(--firefly-chat-surface);
+    border: 1px solid var(--firefly-chat-border);
+    border-radius: 1.1rem;
+    box-shadow: 0 10px 24px rgba(44, 64, 82, 0.07);
+    margin-bottom: 0.55rem !important;
+}
+
+.message__layout {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.message__body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.message__sender-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem 0.35rem;
+    line-height: 1.15;
+    margin-bottom: 0.2rem;
+}
+
+.message__sender-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.2rem;
+    padding: 0.08rem 0.42rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.02em;
+}
+
+.message__content {
+    margin-top: 0.2rem;
+    line-height: 1.28;
+}
+
+.message__content p {
+    margin: 0 0 0.45rem;
+}
+
+.message__content p:last-child {
+    margin-bottom: 0;
+}
+
+.message__content ul,
+.message__content ol {
+    margin: 0.25rem 0 0.45rem 1.2rem;
+    padding: 0;
+}
+
+.message__content li + li {
+    margin-top: 0.12rem;
+}
+
+.message__content blockquote {
+    margin: 0.35rem 0;
+    padding-left: 0.75rem;
+    border-left: 3px solid rgba(54, 93, 118, 0.28);
+    color: var(--firefly-muted);
+}
+
+.message__content code {
+    padding: 0.05rem 0.32rem;
+    border-radius: 0.4rem;
+    background: rgba(24, 39, 53, 0.08);
+    font-size: 0.95em;
+}
+
+.message__content pre {
+    margin: 0.35rem 0;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.85rem;
+    background: #172534;
+    color: #f6fbff;
+    overflow-x: auto;
+}
+
+.message__content pre code {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+}
+
+.message__content a {
+    color: var(--bs-link-color);
+    text-decoration: underline;
+    word-break: break-word;
+}
+
+.message__meta {
+    display: inline-flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+    margin-left: 0.15rem;
+}
+
+.message__meta-top {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+.message__timestamp {
+    white-space: nowrap;
+    line-height: 1;
+}
+
+.message-ack {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: var(--bs-secondary-color);
+}
+
+.message-ack svg {
+    width: 100%;
+    height: 100%;
+}
+
+.message-ack--pending {
+    color: var(--bs-secondary-color);
+}
+
+.message-ack--ack {
+    color: #198754;
+}
+
+.message-ack--implicit_ack {
+    color: #0d6efd;
+}
+
+.message-ack--nak,
+.message-ack--max_retransmit {
+    color: #dc3545;
+}
+
+.message-resend {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0.25rem;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--bs-secondary-color);
+}
+
+.message-resend:hover,
+.message-resend:focus-visible {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+}
+
+.message-resend:disabled { opacity: 0.45; }
+.message-resend svg { width: 1rem; height: 1rem; }
+
+.message .flex-grow-1 {
+    min-width: 0; /* Allows flex item to shrink below content size */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.message .mt-1 {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap; /* Preserve line breaks but allow wrapping */
+    overflow-wrap: anywhere; /* Break anywhere if needed */
+    hyphens: auto;
+    max-width: 100%;
+}
+
+/* Handle long URLs and unbreakable content */
+.message .mt-1 {
+    /* Force break on very long words/URLs */
+    word-break: break-all;
+    overflow-wrap: anywhere;
+}
+
+/* Ensure sender info doesn't cause overflow */
+.message strong,
+.message small {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Handle URLs, links, and long strings specifically */
+.message a,
+.message code,
+.message pre {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    max-width: 100%;
+}
+
+.reply-preview {
+    border-left: 3px solid var(--bs-border-color);
+    padding-left: 0.55rem;
+    margin-bottom: 0.35rem;
+    line-height: 1.2;
+}
+
+.message-unread-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.4rem 0 0.85rem;
+    color: #c84d4d;
+}
+
+.message-unread-divider::before,
+.message-unread-divider::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: currentColor;
+}
+
+.message-unread-divider__label {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.reply-trigger {
+    border: none;
+    background: transparent;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: var(--bs-secondary-color);
+}
+
+.reply-trigger svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Handle Discord/Slack message URLs and long identifiers */
+.message .mt-1:contains('http'),
+.message .mt-1:contains('discord.com'),
+.message .mt-1:contains('://') {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+}
+
+/* Fallback for any remaining overflow issues */
+.d-flex.justify-content-between.align-items-start {
+    min-width: 0;
+    width: 100%;
+}
+
+.d-flex.justify-content-between.align-items-start > * {
+    min-width: 0;
+}
+
+/* Message input textarea styling */
+#messageInput {
+    resize: none;
+    transition: height 0.2s ease;
+    line-height: 1.4;
+    font-family: inherit;
+}
+
+/* Character count styling */
+#charCount {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* Chat layout improvements */
+.card-body.d-flex.flex-column {
+    height: 100%;
+    min-height: 350px;
+}
+
+@media (min-width: 768px) {
+    body.mobile-fixed-nav-page > .container.mt-4 {
+        margin-top: 0 !important;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+        height: calc(100vh - 76px);
+        min-height: calc(100vh - 76px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    body.mobile-fixed-nav-page > .container.mt-4 > .row {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    body.mobile-fixed-nav-page > .container.mt-4 > .row > .col-12 {
+        display: flex;
+        min-height: 0;
+    }
+
+    .chat-shell-card {
+        height: 100%;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .chat-shell-card > .card-body.d-flex.flex-column {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .desktop-chat-header,
+    #chatTabBar,
+    #composerBar {
+        flex: 0 0 auto;
+    }
+
+    #messagesContainer {
+        flex: 1 1 0 !important;
+        height: 0;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+    }
+}
+
+.desktop-chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    background: var(--firefly-chat-surface-muted);
+}
+
+.desktop-connect-panel {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-shrink: 0;
+}
+
+.desktop-status-lights {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.desktop-status-light {
+    width: 0.68rem;
+    height: 0.68rem;
+    border-radius: 999px;
+    background: #95a5b5;
+    box-shadow: 0 0 0 0.15rem rgba(149, 165, 181, 0.18);
+}
+
+.desktop-status-light.is-online {
+    background: #2f9e72;
+    box-shadow: 0 0 0 0.15rem rgba(47, 158, 114, 0.18);
+}
+
+.desktop-status-light.is-warning {
+    background: #d3922e;
+    box-shadow: 0 0 0 0.15rem rgba(211, 146, 46, 0.18);
+}
+
+.desktop-status-light.is-offline {
+    background: #c65353;
+    box-shadow: 0 0 0 0.15rem rgba(198, 83, 83, 0.18);
+}
+
+.desktop-status-light.is-idle {
+    background: #95a5b5;
+    box-shadow: 0 0 0 0.15rem rgba(149, 165, 181, 0.18);
+}
+
+#desktopConnectBtn.is-connected {
+    background: var(--firefly-chat-accent);
+    color: #ffffff;
+    border-color: var(--firefly-chat-accent);
+}
+
+#desktopProfileSubline:empty,
+#mobileProfileSubline:empty {
+    display: none;
+}
+
+#messagesContainer {
+    background: inherit;
+    border: none;
+    border-radius: 0;
+}
+
+.dm-thread-card {
+    width: 100%;
+    border: 1px solid var(--firefly-chat-border);
+    background: var(--firefly-chat-surface);
+    border-radius: 1rem;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.75rem;
+    text-align: left;
+    box-shadow: 0 10px 24px rgba(44, 64, 82, 0.07);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.dm-thread-card:hover {
+    border-color: var(--firefly-chat-accent);
+    box-shadow: 0 14px 28px rgba(31, 93, 150, 0.12);
+    transform: translateY(-1px);
+}
+
+.thread-card__shell {
+    cursor: pointer;
+}
+
+.thread-card__content {
+    min-width: 0;
+}
+
+.thread-card__headline {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.thread-card__headline .fw-semibold {
+    min-width: 0;
+}
+
+.thread-card__unread {
+    flex: 0 0 auto;
+}
+
+.thread-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.thread-card__delete {
+    flex-shrink: 0;
+}
+
+.chat-tab-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.chat-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.2rem;
+    padding: 0.08rem 0.38rem;
+    border-radius: 999px;
+    background: #c84d4d;
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.chat-tab-badge.chat-tab-badge--mobile {
+    min-width: 1.1rem;
+    padding: 0.06rem 0.34rem;
+    font-size: 0.64rem;
+}
+
+.node-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.nodes-back-to-top {
+    position: sticky;
+    bottom: 1rem;
+    margin-top: 1rem;
+    margin-left: calc(100% - 2.9rem);
+    width: 2.9rem;
+    height: 2.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--firefly-chat-accent);
+    border: 1px solid var(--firefly-chat-accent);
+    color: #ffffff;
+    box-shadow: 0 10px 24px rgba(23, 71, 111, 0.28);
+    transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease;
+    z-index: 5;
+}
+
+.nodes-back-to-top:hover,
+.nodes-back-to-top:focus {
+    background: var(--firefly-chat-accent-strong);
+    border-color: var(--firefly-chat-accent-strong);
+    color: #ffffff;
+}
+
+.nodes-back-to-top.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(0.35rem);
+}
+
+.nodes-back-to-top svg {
+    width: 1.2rem;
+    height: 1.2rem;
+}
+
+.node-card {
+    border: 1px solid var(--firefly-chat-border);
+    border-radius: 0.95rem;
+    padding: 0.58rem 0.7rem;
+    background: var(--firefly-chat-surface);
+    box-shadow: 0 10px 24px rgba(44, 64, 82, 0.07);
+}
+
+.node-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.3rem;
+}
+
+.node-card__title {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.node-card__name-line {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.node-card__short-pill {
+    flex: 0 0 auto;
+}
+
+.node-card__name {
+    font-weight: 700;
+    line-height: 1.2;
+    font-size: 0.92rem;
+    min-width: 0;
+}
+
+.node-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.12rem 0.45rem;
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+    margin-top: 0.08rem;
+}
+
+.node-card__facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.3rem 0.45rem;
+    margin-bottom: 0.4rem;
+}
+
+.node-card__fact {
+    min-width: 0;
+}
+
+.node-card__label {
+    display: block;
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.1rem;
+    line-height: 1.1;
+}
+
+.node-card__value {
+    font-size: 0.78rem;
+    line-height: 1.15;
+}
+
+.node-card__value .small {
+    font-size: 0.74rem !important;
+}
+
+.node-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.3rem;
+}
+
+.node-card__actions .btn {
+    padding: 0.24rem 0.52rem;
+    border-radius: 0.7rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.node-card .badge {
+    font-size: 0.64rem;
+    padding: 0.22rem 0.36rem;
+}
+
+.node-card code {
+    font-size: 0.72rem;
+}
+
+.node-card__actions .node-dm-trigger,
+.node-card__actions .node-nodeinfo-trigger,
+.node-card__actions .node-traceroute-trigger {
+    background: #3f77b6;
+    border-color: #3f77b6;
+    color: #ffffff;
+}
+
+.node-card__actions .node-dm-trigger:hover,
+.node-card__actions .node-dm-trigger:focus,
+.node-card__actions .node-nodeinfo-trigger:hover,
+.node-card__actions .node-nodeinfo-trigger:focus,
+.node-card__actions .node-traceroute-trigger:hover,
+.node-card__actions .node-traceroute-trigger:focus {
+    background: #35679c;
+    border-color: #35679c;
+    color: #ffffff;
+}
+
+.traceroute-path {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.traceroute-hop {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    padding: 0.35rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(73, 115, 157, 0.12);
+    color: var(--bs-body-color);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.traceroute-hop__snr {
+    font-size: 0.72rem;
+    color: var(--bs-secondary-color);
+}
+
+.traceroute-arrow {
+    font-size: 0.82rem;
+    color: var(--bs-secondary-color);
+}
+
+.traceroute-section + .traceroute-section {
+    margin-top: 1rem;
+}
+
+.map-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 0;
+    height: 100%;
+    flex: 1 1 auto;
+}
+
+.map-panel__toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.node-map {
+    min-height: 0;
+    height: auto;
+    flex: 1 1 auto;
+    border-radius: 0;
+    overflow: hidden;
+    border: none;
+    background: var(--firefly-chat-surface-muted);
+}
+
+.map-node-icon {
+    background: transparent;
+    border: none;
+}
+
+.map-node-badge {
+    width: 2.35rem;
+    height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--node-color, var(--firefly-chat-accent));
+    color: var(--node-text-color, #fff);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    box-shadow: 0 8px 18px rgba(24, 36, 48, 0.24);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+}
+
+.profile-manager {
+    display: grid;
+    gap: 1rem;
+}
+
+.profile-manager__selector {
+    display: flex;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.profile-manager__selector-field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.profile-manager__grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.channel-editor-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.channel-editor-row {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.85rem;
+    padding: 0.75rem;
+    background: var(--bs-tertiary-bg);
+}
+
+.channel-editor-row__footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-top: 0.65rem;
+}
+
+.channel-editor-row__action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    min-height: 1.9rem;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.78rem;
+}
+
+.profile-item {
+    border: 1px solid var(--firefly-chat-border);
+    border-radius: 1rem;
+    padding: 0.85rem;
+    background: var(--firefly-chat-surface);
+}
+
+.profile-item__content {
+    display: grid;
+    gap: 0.28rem;
+}
+
+.profile-item__title {
+    margin-bottom: 0;
+    line-height: 1.15;
+}
+
+.profile-item__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.18rem 0.55rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.84rem;
+    line-height: 1.1;
+}
+
+.profile-item__channels {
+    display: grid;
+    gap: 0.18rem;
+    font-size: 0.84rem;
+    line-height: 1.1;
+}
+
+.profile-item__actions {
+    display: flex;
+    gap: 0.45rem;
+    margin-top: 0.6rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--firefly-chat-border);
+}
+
+.profile-item__actions .btn {
+    flex: 1 1 0;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.profile-item__created {
+    line-height: 1.1;
+}
+
+.profile-manager__create-shell {
+    border: 1px solid var(--firefly-chat-border);
+    border-radius: 1rem;
+    background: var(--firefly-chat-surface);
+    overflow: hidden;
+}
+
+.profile-manager__create-shell > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 1rem 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-weight: 700;
+}
+
+.profile-manager__create-shell > summary::-webkit-details-marker {
+    display: none;
+}
+
+.profile-manager__create-shell > summary::after {
+    content: "+";
+    font-size: 1.15rem;
+    line-height: 1;
+    color: var(--firefly-chat-accent);
+}
+
+.profile-manager__create-shell[open] > summary::after {
+    content: "\2212";
+}
+
+.profile-manager__create-body {
+    padding: 0 1.1rem 1.1rem;
+    border-top: 1px solid var(--firefly-chat-border);
+}
+
+/* Remove default margins that might cause issues */
+.card-body.p-0 {
+    padding: 0 !important;
+}
+
+/* Ensure no unwanted borders in messages area */
+#messagesContainer {
+    border-top: none !important;
+    border-bottom: none !important;
+}
+
+#messagesContainer.messages-container--map {
+    padding: 0 0 calc(4.75rem + env(safe-area-inset-bottom)) 0 !important;
+    overflow: hidden !important;
+}
+
+#messagesContainer.messages-container--nav-safe {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+/* Mobile compact profile controls */
+@media (max-width: 767.98px) {
+    body > .navbar {
+        display: none;
+    }
+
+    body {
+        background: var(--mudp-light-bg);
+        min-height: 100vh;
+    }
+
+    body[data-bs-theme="dark"] {
+        background: var(--mudp-dark-bg) !important;
+    }
+
+    body > .container.mt-4 {
+        max-width: 100%;
+        margin-top: 0 !important;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+        padding-top: 0;
+    }
+
+    .row {
+        --bs-gutter-x: 0;
+    }
+
+    .chat-shell-card {
+        border: none;
+        border-radius: 1.75rem 1.75rem 0 0;
+        background: var(--firefly-chat-surface);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 24px 60px rgba(32, 54, 76, 0.16);
+        margin-bottom: 0;
+        position: fixed;
+        left: 0.5rem;
+        right: 0.5rem;
+        top: 0;
+        bottom: 0;
+    }
+
+    .card-body.d-flex.flex-column {
+        height: 100% !important;
+        min-height: 0 !important;
+    }
+
+    #chatTabs {
+        display: none !important;
+    }
+
+    #chatTabBar {
+        display: none !important;
+    }
+
+    #messagesContainer {
+        background: var(--firefly-chat-surface-muted);
+        padding-bottom: 1rem !important;
+        min-height: 0;
+    }
+
+    .node-map {
+        min-height: 0;
+        height: auto;
+    }
+
+    .profile-manager__grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .profile-manager__selector {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .profile-manager {
+        padding-bottom: 0;
+    }
+
+    .profile-item {
+        padding: 0.8rem;
+    }
+
+    .profile-item__actions {
+        display: flex;
+        gap: 0.4rem;
+        margin-top: 0.55rem;
+        padding-top: 0.5rem;
+    }
+
+    .reply-preview {
+        border-left-color: var(--firefly-chat-accent);
+    }
+
+    .mobile-bottom-nav__text {
+        white-space: nowrap;
+    }
+
+    .mobile-bottom-nav__badge {
+        position: absolute;
+        top: -0.18rem;
+        right: -0.34rem;
+        min-width: 1rem;
+        padding: 0.05rem 0.24rem;
+        line-height: 1;
+        box-shadow: 0 0 0 2px var(--firefly-chat-surface-muted);
+        z-index: 1;
+    }
+
+    #composerBar {
+        padding-bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
+    }
+
+    #mobileSettingsSheet {
+        --bs-offcanvas-height: min(72vh, 34rem);
+        border-radius: 1.5rem 1.5rem 0 0;
+        background: var(--firefly-chat-surface-muted);
+        backdrop-filter: blur(16px);
+    }
+
+    #mobileSettingsSheet .offcanvas-header {
+        border-bottom: 1px solid var(--firefly-chat-border);
+    }
+
+    #mobileSettingsSheet .card {
+        border-radius: 1rem;
+    }
+
+    #mobileSettingsSheet .profile-selector-status {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.9rem 1rem;
+        border-radius: 1rem;
+        border: 1px solid rgba(128, 160, 190, 0.18);
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: none;
+    }
+
+    #mobileSettingsSheet .profile-selector-status__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        min-height: 2.1rem;
+    }
+
+    #mobileSettingsSheet .profile-selector-status__label {
+        color: var(--bs-secondary-color);
+        font-size: 0.98rem;
+        line-height: 1.1;
+    }
+
+    #mobileSettingsSheet .profile-selector-status__badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 8.6rem;
+        min-height: 2.1rem;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.92rem;
+        line-height: 1;
+        font-weight: 700;
+        border-radius: 0.9rem;
+    }
+
+    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 3rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--firefly-chat-accent);
+        border-radius: 1rem;
+        color: #fff;
+        background: var(--firefly-chat-accent);
+        box-shadow: 0 8px 18px rgba(31, 93, 150, 0.2);
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        text-align: center;
+    }
+
+    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link:hover,
+    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link:focus,
+    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link:active {
+        color: #fff;
+        background: var(--firefly-chat-accent-strong);
+        border-color: var(--firefly-chat-accent-strong);
+    }
+
+    [data-bs-theme="dark"] #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link {
+        border-color: var(--firefly-chat-accent);
+        box-shadow: 0 14px 28px rgba(5, 12, 20, 0.42);
+    }
+
+    @media (min-width: 768px) {
+        #mobileSettingsSheet.profile-selector-sheet {
+            --bs-offcanvas-height: min(88vh, 44rem);
+            top: 0;
+            right: 0;
+            left: auto !important;
+            bottom: 0;
+            width: min(25rem, 92vw) !important;
+            height: 100% !important;
+            max-height: none !important;
+            border-top: none !important;
+            border-left: 1px solid var(--firefly-chat-border);
+            border-radius: 1.5rem 0 0 1.5rem !important;
+            background: var(--firefly-chat-surface-muted);
+            transform: translateX(100%);
+        }
+
+        #mobileSettingsSheet.profile-selector-sheet.show,
+        #mobileSettingsSheet.profile-selector-sheet.showing {
+            transform: none;
+        }
+
+        #mobileSettingsSheet.profile-selector-sheet .offcanvas-body {
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link {
+            margin-top: auto;
+            position: sticky;
+            bottom: 0;
+            background: inherit;
+        }
+    }
+
+    #composerBar {
+        padding: 0.85rem 0.85rem calc(4.75rem + env(safe-area-inset-bottom)) 0.85rem !important;
+        background: var(--firefly-chat-surface);
+        border-top: 1px solid var(--firefly-chat-border) !important;
+    }
+
+    .input-group {
+        align-items: stretch;
+    }
+
+    .input-group .btn {
+        border-top-right-radius: 1rem;
+        border-bottom-right-radius: 1rem;
+    }
+
+    #messageInput {
+        max-height: 6.5rem;
+        min-height: 2.8rem;
+        line-height: 1.3;
+        font-size: 16px;
+        border-radius: 1rem 0 0 1rem;
+    }
+
+    .message .mt-1 {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        line-break: anywhere;
+    }
+
+    .d-flex.gap-2.align-items-center {
+        gap: 0.5rem !important;
+    }
+
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.775rem;
+    }
+
+    .card-body > div:last-child {
+        padding: 0.75rem !important;
+    }
+
+    .input-group.mb-2 {
+        margin-bottom: 0.5rem !important;
+    }
+}
+
+/* Extra small screens - make buttons even more compact */
+@media (max-width: 991.98px) {
+    .node-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .node-card__facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .dm-thread-card > .d-flex.justify-content-between.align-items-start {
+        flex-direction: column;
+        align-items: stretch !important;
+        gap: 0.55rem !important;
+    }
+
+    .thread-card__actions {
+        justify-content: space-between;
+        width: 100%;
+        gap: 0.4rem;
+    }
+
+    .thread-card__actions .small {
+        min-width: 0;
+    }
+
+    .thread-card__delete {
+        margin-left: auto;
+    }
+
+    .node-card {
+        padding: 0.55rem 0.6rem;
+        border-radius: 0.75rem;
+    }
+
+    .node-card__header {
+        gap: 0.45rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .node-card__facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.35rem 0.5rem;
+        margin-bottom: 0.45rem;
+    }
+
+    .node-card__actions {
+        justify-content: stretch;
+        gap: 0.35rem;
+    }
+
+    .node-card__actions .btn {
+        flex: 1 1 0;
+        padding: 0.24rem 0.4rem;
+        font-size: 0.76rem;
+    }
+
+    .node-card__name {
+        font-size: 0.9rem;
+    }
+
+    .node-card__meta {
+        font-size: 0.74rem;
+        gap: 0.08rem 0.4rem;
+    }
+
+    .node-card__label {
+        font-size: 0.58rem;
+    }
+
+    .node-card__value {
+        font-size: 0.78rem;
+    }
+
+    .node-card .badge {
+        font-size: 0.64rem;
+        padding: 0.22rem 0.34rem;
+    }
+
+    .node-card code {
+        font-size: 0.72rem;
+    }
+}
+
+@media (max-width: 375px) {
+    .d-md-none .btn-sm {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.7rem;
+    }
+    
+    .d-md-none .form-select-sm {
+        font-size: 0.775rem;
+    }
+    
+    .d-md-none .gap-2 {
+        gap: 0.25rem !important;
+    }
+}
+
+/* Ensure notifications are visible on mobile */
+@media (max-width: 576px) {
+    .alert.position-fixed {
+        top: 10px !important;
+        right: 10px !important;
+        left: 10px !important;
+        max-width: none !important;
+    }
+}
+</style>
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+></script>
+<script>
+console.log('[page] index.js inline loaded');
+
+let currentProfile = null;
+let socket = null;
+let currentChannelRoom = null;
+let currentProfileRoom = null;
+let activeChatTab = 'channel';
+let activeChannelIndex = null;
+let activeDmTargetNodeNum = null;
+let pendingChannelIndex = null;
+let pendingDmTargetNodeNum = null;
+let meshNodes = [];
+let nodeSearchQuery = '';
+const resendingMessageIds = new Set();
+let channelMessages = [];
+let dmMessages = [];
+let messageSnapshotRequestId = 0;
+let dmTargets = [];
+let replyingToPacketId = null;
+let currentSocketStatusClass = 'bg-secondary';
+let currentInterfaceStatusClass = 'bg-warning';
+let unreadChannelMessageCounts = new Map();
+let unreadDmMessageCounts = new Map();
+let managedProfiles = {{ profiles|tojson }};
+let mapInstance = null;
+let mapLayerGroup = null;
+let pendingThreadStateRefresh = null;
+let activeTracerouteRequest = null;
+let channelSelectionRequestId = 0;
+let isSendingMessage = false;
+const notificationAssetUrls = {
+    icon: '{{ url_for("static", filename="images/meshthreads.svg") }}',
+    badge: '{{ url_for("static", filename="images/meshthreads.svg") }}',
+};
+const currentUserId = {{ (current_user.id if current_user else '')|tojson }};
+const notificationPreferenceStorageKey = `firefly.notifications.enabled:${currentUserId}`;
+let notificationSettings = {
+    enabled: false,
+    supported: typeof Notification !== 'undefined',
+    permission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+    busy: false,
+};
+
+document.addEventListener('DOMContentLoaded', async function() {
+    initializePendingChatContext();
+
+    try {
+        if (typeof io !== 'undefined') {
+            initializeSocket();
+        } else {
+            throw new Error('socket.io-client not loaded');
+        }
+    } catch (e) {
+        console.error('[socket] init failed:', e);
+        updateConnectionStatus('bg-danger', 'Socket error');
+    }
+
+    document.getElementById('setProfileBtn').addEventListener('click', setProfile);
+    document.getElementById('profileSelect').addEventListener('change', handleProfileSelectionChange);
+    document.getElementById('mobileConnectBtn').addEventListener('click', handleMobileConnectClick);
+    document.getElementById('desktopConnectBtn').addEventListener('click', handleDesktopConnectClick);
+    document.getElementById('sendBtn').addEventListener('click', sendMessage);
+    document.getElementById('cancelReplyBtn').addEventListener('click', clearReplyComposer);
+    document.getElementById('channelTabBtn').addEventListener('click', openChannelInbox);
+    document.getElementById('dmTabBtn').addEventListener('click', openDmInbox);
+    document.getElementById('nodesTabBtn').addEventListener('click', openNodesInbox);
+    document.getElementById('mapTabBtn').addEventListener('click', openMapInbox);
+    document.getElementById('desktopProfilesTabBtn').addEventListener('click', openProfilesInbox);
+    document.getElementById('mobileChannelsBtn').addEventListener('click', openChannelInbox);
+    document.getElementById('mobileDmsBtn').addEventListener('click', openDmInbox);
+    document.getElementById('mobileNodesBtn').addEventListener('click', openNodesInbox);
+    document.getElementById('mobileMapBtn').addEventListener('click', openMapInbox);
+    document.getElementById('mobileProfilesBtn').addEventListener('click', openProfilesInbox);
+    document.getElementById('manageProfilesBtn').addEventListener('click', openProfilesInbox);
+    document.getElementById('saveProfileBtn').addEventListener('click', updateManagedProfile);
+    document.getElementById('addEditChannelBtn').addEventListener('click', () => addProfileChannelRow('editChannelsList'));
+    document.getElementById('editChannelsList').addEventListener('click', handleEditChannelListClick);
+
+    const messageInput = document.getElementById('messageInput');
+    const messagesContainer = document.getElementById('messagesContainer');
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    messageInput.addEventListener('input', updateCharacterCounter);
+    if (messagesContainer) {
+        messagesContainer.addEventListener('click', handleThreadCardClick);
+        messagesContainer.addEventListener('input', handleThreadListInput);
+        messagesContainer.addEventListener('scroll', () => updateNodesBackToTopVisibility(messagesContainer));
+    }
+
+    await loadCurrentProfileAndStatus();
+    await loadNotificationPreferences();
+    await loadMessages();
+    await loadDmTargets();
+    await applyPendingChatContext();
+    renderActiveMessages();
+    updateComposerState();
+
+    openProfileSelectorIfRequested();
+    setInterval(async () => {
+        refreshProfileBanner();
+    }, 30000);
+});
+
+function openProfileSelectorIfRequested() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('open_profiles') !== '1') {
+        return;
+    }
+    void openProfilesInbox();
+    params.delete('open_profiles');
+    const query = params.toString();
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState({}, '', nextUrl);
+}
+
+function openProfileSelector() {
+    const sheet = document.getElementById('mobileSettingsSheet');
+    if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+        bootstrap.Offcanvas.getOrCreateInstance(sheet).show();
+    }
+}
+
+function closeProfileSelector() {
+    const sheet = document.getElementById('mobileSettingsSheet');
+    if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+        bootstrap.Offcanvas.getOrCreateInstance(sheet).hide();
+    }
+}
+
+function initializePendingChatContext() {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'dm' || tab === 'dms') {
+        activeChatTab = 'dm';
+    } else if (tab === 'nodes') {
+        activeChatTab = 'nodes';
+    } else if (tab === 'map') {
+        activeChatTab = 'map';
+    } else if (tab === 'profiles') {
+        activeChatTab = 'profiles';
+    }
+    const channelParam = params.get('channel');
+    if (channelParam !== null) {
+        const parsedChannelIndex = parseInt(channelParam, 10);
+        if (!Number.isNaN(parsedChannelIndex)) {
+            pendingChannelIndex = parsedChannelIndex;
+            activeChatTab = 'channel';
+        }
+    }
+    const dmParam = params.get('dm');
+    if (dmParam) {
+        const parsed = parseInt(dmParam, 10);
+        if (!Number.isNaN(parsed)) {
+            pendingDmTargetNodeNum = parsed;
+            activeChatTab = 'dm';
+        }
+    }
+}
+
+function getProfileChannels() {
+    return Array.isArray(currentProfile?.channels) ? currentProfile.channels : [];
+}
+
+function getActiveChannel() {
+    const channels = getProfileChannels();
+    if (activeChannelIndex === null || activeChannelIndex === undefined) return null;
+    return channels[Number(activeChannelIndex)] || null;
+}
+
+function normalizeNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const normalized = Number(value);
+    return Number.isFinite(normalized) ? normalized : null;
+}
+
+function getChannelNumberByIndex(channelIndex) {
+    if (channelIndex === null || channelIndex === undefined) return null;
+    const channel = getProfileChannels()[Number(channelIndex)];
+    if (!channel) return null;
+
+    const configuredChannelNumber = normalizeNumber(channel.channel_number);
+    if (configuredChannelNumber !== null) {
+        return configuredChannelNumber;
+    }
+
+    if (Number(activeChannelIndex) === Number(channelIndex)) {
+        return normalizeNumber(currentChannelRoom);
+    }
+
+    return null;
+}
+
+function getChannelIndexByNumber(channelNumber) {
+    const normalizedChannelNumber = normalizeNumber(channelNumber);
+    if (normalizedChannelNumber === null) return null;
+
+    const channels = getProfileChannels();
+    for (let index = 0; index < channels.length; index += 1) {
+        if (normalizeNumber(channels[index]?.channel_number) === normalizedChannelNumber) {
+            return index;
+        }
+    }
+    return null;
+}
+
+function getUnreadTotal(unreadMap) {
+    let total = 0;
+    unreadMap.forEach(count => {
+        total += Number(count) || 0;
+    });
+    return total;
+}
+
+function setUnreadBadge(elementId, count) {
+    const badge = document.getElementById(elementId);
+    if (!badge) return;
+
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.remove('d-none');
+    } else {
+        badge.textContent = '0';
+        badge.classList.add('d-none');
+    }
+}
+
+function updateNavigationBadges() {
+    const unreadChannelCount = getUnreadTotal(unreadChannelMessageCounts);
+    const unreadDmCount = getUnreadTotal(unreadDmMessageCounts);
+    setUnreadBadge('channelTabBadge', unreadChannelCount);
+    setUnreadBadge('dmTabBadge', unreadDmCount);
+    setUnreadBadge('mobileChannelsBadge', unreadChannelCount);
+    setUnreadBadge('mobileDmsBadge', unreadDmCount);
+    updateAppIconBadge(unreadChannelCount + unreadDmCount);
+}
+
+function updateAppIconBadge(count) {
+    const unreadCount = Math.max(0, Number(count) || 0);
+
+    if (typeof navigator === 'undefined') {
+        return;
+    }
+
+    if (typeof navigator.setAppBadge === 'function' || typeof navigator.clearAppBadge === 'function') {
+        try {
+            if (unreadCount > 0 && typeof navigator.setAppBadge === 'function') {
+                void navigator.setAppBadge(unreadCount);
+            } else if (unreadCount <= 0 && typeof navigator.clearAppBadge === 'function') {
+                void navigator.clearAppBadge();
+            }
+        } catch (error) {
+            console.debug('App badge update failed:', error);
+        }
+    }
+}
+
+function incrementUnreadCount(unreadMap, key) {
+    const normalizedKey = normalizeNumber(key);
+    if (normalizedKey === null) return;
+    unreadMap.set(normalizedKey, (unreadMap.get(normalizedKey) || 0) + 1);
+    updateNavigationBadges();
+}
+
+function getNotificationPermissionState() {
+    return typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+}
+
+function syncNotificationCapabilityState() {
+    notificationSettings.supported = typeof Notification !== 'undefined';
+    notificationSettings.permission = getNotificationPermissionState();
+}
+
+function syncNotificationToggleUi() {
+    syncNotificationCapabilityState();
+
+    const toggle = document.getElementById('notificationsToggle');
+    const status = document.getElementById('notificationsStatusText');
+    if (!toggle || !status) return;
+
+    toggle.checked = Boolean(notificationSettings.enabled);
+    toggle.disabled = Boolean(notificationSettings.busy) || !notificationSettings.supported;
+    status.textContent = notificationSettings.enabled && notificationSettings.permission === 'granted'
+        ? 'Enabled'
+        : 'Disabled';
+    status.className = notificationSettings.enabled && notificationSettings.permission === 'granted'
+        ? 'badge text-bg-success'
+        : 'badge text-bg-secondary';
+}
+
+async function persistNotificationPreference(enabled) {
+    const normalizedEnabled = Boolean(enabled);
+    window.localStorage.setItem(notificationPreferenceStorageKey, normalizedEnabled ? 'true' : 'false');
+    notificationSettings.enabled = normalizedEnabled;
+    syncNotificationCapabilityState();
+    syncNotificationToggleUi();
+    return { notifications_enabled: normalizedEnabled };
+}
+
+async function showSystemNotification(title, options) {
+    syncNotificationCapabilityState();
+    if (!notificationSettings.supported || notificationSettings.permission !== 'granted') {
+        return;
+    }
+
+    try {
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.ready;
+            await registration.showNotification(title, options);
+            return;
+        }
+    } catch (error) {
+        console.error('Service worker notification failed:', error);
+    }
+
+    try {
+        const notification = new Notification(title, options);
+        notification.onclick = function() {
+            window.focus();
+            const targetUrl = notification?.data?.url;
+            if (targetUrl) {
+                window.location.assign(targetUrl);
+            }
+            notification.close();
+        };
+    } catch (error) {
+        console.error('Browser notification failed:', error);
+    }
+}
+
+async function loadNotificationPreferences() {
+    syncNotificationCapabilityState();
+
+    try {
+        notificationSettings.enabled = window.localStorage.getItem(notificationPreferenceStorageKey) === 'true';
+    } catch (error) {
+        console.error('Error loading notification preferences:', error);
+        notificationSettings.enabled = false;
+    }
+
+    syncNotificationToggleUi();
+}
+
+async function handleNotificationToggleChange(event) {
+    const toggle = event?.target;
+    const desiredState = Boolean(toggle?.checked);
+
+    syncNotificationCapabilityState();
+    if (!notificationSettings.supported) {
+        notificationSettings.enabled = false;
+        syncNotificationToggleUi();
+        showNotification('This browser does not support notifications.', 'warning');
+        return;
+    }
+
+    notificationSettings.busy = true;
+    syncNotificationToggleUi();
+
+    try {
+        if (desiredState) {
+            let permission = notificationSettings.permission;
+            if (permission !== 'granted') {
+                permission = await Notification.requestPermission();
+                notificationSettings.permission = permission;
+            }
+            if (permission !== 'granted') {
+                notificationSettings.enabled = false;
+                syncNotificationToggleUi();
+                showNotification('Notifications remain off because browser permission was not granted.', 'warning', 5000);
+                return;
+            }
+        }
+
+        await persistNotificationPreference(desiredState);
+        showNotification(
+            desiredState ? 'Notifications enabled for this device.' : 'Notifications disabled for this device.',
+            desiredState ? 'success' : 'info',
+            3000
+        );
+
+        if (desiredState) {
+            void showSystemNotification('MeshThreads notifications enabled', {
+                body: 'You will now receive alerts for new messages.',
+                icon: notificationAssetUrls.icon,
+                badge: notificationAssetUrls.badge,
+                tag: 'firefly-notifications-enabled',
+                data: { url: window.location.href },
+            });
+        }
+    } catch (error) {
+        console.error('Error updating notification preference:', error);
+        showNotification(`Unable to update notifications: ${error.message}`, 'danger', 5000);
+        try {
+            await loadNotificationPreferences();
+        } catch (_reloadError) {
+            syncNotificationToggleUi();
+        }
+    } finally {
+        notificationSettings.busy = false;
+        syncNotificationToggleUi();
+    }
+}
+
+function shouldSuppressSystemNotification(message) {
+    const pageIsActive = document.visibilityState === 'visible' && document.hasFocus();
+    if (!pageIsActive) {
+        return false;
+    }
+
+    if ((message.message_type || 'channel') === 'dm') {
+        const peerNodeNum = getPeerNodeNum(message);
+        return Boolean(peerNodeNum && isViewingDmThread(peerNodeNum));
+    }
+
+    const channelNumber = normalizeNumber(message.channel);
+    return channelNumber !== null && isViewingChannelThread(channelNumber);
+}
+
+function buildMessageNotificationPayload(message) {
+    if (!currentProfile || !message) return null;
+
+    const bodyText = (message.content || '').trim() || 'New message';
+    const senderDisplayName = getMessageSenderDisplayName(message);
+    const alertText = `${senderDisplayName}: ${bodyText}`;
+
+    if ((message.message_type || 'channel') === 'dm') {
+        const peerNodeNum = getPeerNodeNum(message);
+        if (!peerNodeNum) return null;
+
+        return {
+            title: 'MeshThreads',
+            options: {
+                body: alertText,
+                icon: notificationAssetUrls.icon,
+                badge: notificationAssetUrls.badge,
+                tag: `firefly-dm-${currentProfile.id}-${peerNodeNum}`,
+                data: {
+                    url: `${window.location.origin}${window.location.pathname}?tab=dms&dm=${encodeURIComponent(String(peerNodeNum))}`,
+                },
+            },
+        };
+    }
+
+    const channelNumber = normalizeNumber(message.channel);
+    const channelIndex = getChannelIndexByNumber(channelNumber);
+
+    return {
+        title: 'MeshThreads',
+        options: {
+            body: alertText,
+            icon: notificationAssetUrls.icon,
+            badge: notificationAssetUrls.badge,
+            tag: `firefly-channel-${currentProfile.id}-${channelNumber ?? 'unknown'}`,
+            data: {
+                url: channelIndex !== null
+                    ? `${window.location.origin}${window.location.pathname}?channel=${encodeURIComponent(String(channelIndex))}`
+                    : `${window.location.origin}${window.location.pathname}`,
+            },
+        },
+    };
+}
+
+function notifyForIncomingMessage(message) {
+    syncNotificationCapabilityState();
+    if (!notificationSettings.enabled || !notificationSettings.supported || notificationSettings.permission !== 'granted') {
+        return;
+    }
+    if (shouldSuppressSystemNotification(message)) {
+        return;
+    }
+
+    const payload = buildMessageNotificationPayload(message);
+    if (!payload) return;
+    void showSystemNotification(payload.title, payload.options);
+}
+
+function clearUnreadCount(unreadMap, key) {
+    const normalizedKey = normalizeNumber(key);
+    if (normalizedKey === null) return;
+    if (unreadMap.delete(normalizedKey)) {
+        updateNavigationBadges();
+    }
+}
+
+function resetUnreadState() {
+    unreadChannelMessageCounts = new Map();
+    unreadDmMessageCounts = new Map();
+    updateNavigationBadges();
+}
+
+function applyUnreadState(payload) {
+    resetUnreadState();
+
+    const channelCounts = payload?.unread_channel_counts || {};
+    Object.entries(channelCounts).forEach(([channelNumber, count]) => {
+        const normalizedChannel = normalizeNumber(channelNumber);
+        if (normalizedChannel !== null && Number(count) > 0) {
+            unreadChannelMessageCounts.set(normalizedChannel, Number(count));
+        }
+    });
+
+    const dmCounts = payload?.unread_dm_counts || {};
+    Object.entries(dmCounts).forEach(([peerNodeNum, count]) => {
+        const normalizedPeer = normalizeNumber(peerNodeNum);
+        if (normalizedPeer !== null && Number(count) > 0) {
+            unreadDmMessageCounts.set(normalizedPeer, Number(count));
+        }
+    });
+
+    updateNavigationBadges();
+}
+
+function isViewingChannelThread(channelNumber) {
+    const activeChannelNumber = getChannelNumberByIndex(activeChannelIndex);
+    return activeChatTab === 'channel'
+        && activeChannelIndex !== null
+        && activeChannelIndex !== undefined
+        && activeChannelNumber !== null
+        && Number(activeChannelNumber) === Number(channelNumber);
+}
+
+function isViewingDmThread(nodeNum) {
+    return activeChatTab === 'dm'
+        && activeDmTargetNodeNum !== null
+        && activeDmTargetNodeNum !== undefined
+        && Number(activeDmTargetNodeNum) === Number(nodeNum);
+}
+
+async function markCurrentChannelRead(channelIndex = activeChannelIndex) {
+    if (!currentProfile || channelIndex === null || channelIndex === undefined) return;
+    try {
+        const response = await fetch('/api/channel-read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify({ channel_index: channelIndex }),
+        });
+        const payload = await response.json();
+        if (response.ok) {
+            applyUnreadState(payload);
+        }
+    } catch (error) {
+        console.error('Error marking channel read:', error);
+    }
+}
+
+async function markDmThreadRead(peerNodeNum = activeDmTargetNodeNum) {
+    if (!currentProfile || !peerNodeNum) return;
+    try {
+        const response = await fetch('/api/dm-read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify({ peer_node_num: peerNodeNum }),
+        });
+        const payload = await response.json();
+        if (response.ok) {
+            applyUnreadState(payload);
+        }
+    } catch (error) {
+        console.error('Error marking DM read:', error);
+    }
+}
+
+function initializeSocket() {
+    socket = io();
+
+    socket.on('connect', function() {
+        updateConnectionStatus('bg-success', 'Connected');
+        if (currentChannelRoom) {
+            joinChannelRoom(currentChannelRoom);
+        }
+        if (currentProfileRoom) {
+            joinProfileRoom(currentProfileRoom);
+        }
+        if (currentProfile) void refreshThreadStateSnapshot();
+    });
+
+    socket.on('connect_error', function(err) {
+        console.error('[socket] connect_error', err);
+        updateConnectionStatus('bg-danger', 'Connect error');
+    });
+
+    socket.on('reconnect_attempt', function() {
+        updateConnectionStatus('bg-warning', 'Reconnecting…');
+    });
+
+    socket.on('disconnect', function() {
+        updateConnectionStatus('bg-danger', 'Disconnected');
+    });
+
+    socket.on('new_message', function(message) {
+        addIncomingMessage(message);
+    });
+
+    socket.on('message_update', function(message) {
+        applyMessageUpdate(message);
+    });
+
+    socket.on('node_update', function(payload) {
+        applyNodeUpdate(payload);
+    });
+
+    socket.on('traceroute_result', function(result) {
+        handleTracerouteResult(result);
+    });
+}
+
+async function loadCurrentProfileAndStatus() {
+    try {
+        const response = await fetch('/api/current-profile');
+        const profile = await response.json();
+        currentProfile = profile;
+
+        if (profile) {
+            const mobileSelect = document.getElementById('profileSelect');
+            if (mobileSelect) mobileSelect.value = profile.id;
+            activeChannelIndex = Number.isInteger(profile.selected_channel_index) ? profile.selected_channel_index : 0;
+
+            currentChannelRoom = profile.channel_number ?? null;
+            currentProfileRoom = profile.id;
+            if (socket && socket.connected) {
+                if (currentChannelRoom !== null) joinChannelRoom(currentChannelRoom);
+                joinProfileRoom(currentProfileRoom);
+            }
+
+            if (profile.interface_status === 'started') {
+                updateInterfaceStatus('bg-success', 'Connected');
+            } else if (profile.interface_status === 'failed') {
+                updateInterfaceStatus('bg-danger', 'Failed to Start');
+            } else if (profile.interface_status === 'conflict') {
+                updateInterfaceStatus('bg-warning', 'Profile Conflict');
+            } else if (profile.interface_status === 'stopped') {
+                updateInterfaceStatus('bg-secondary', 'Stopped');
+            } else {
+                updateInterfaceStatus('bg-warning', 'Not Started');
+            }
+        } else {
+            currentChannelRoom = null;
+            currentProfileRoom = null;
+            activeChannelIndex = null;
+            updateInterfaceStatus('bg-warning', 'Not Started');
+        }
+
+        applyUnreadState(profile);
+        updateProfileBanner(profile);
+        syncProfileSelectors();
+    } catch (error) {
+        console.error('Error loading profile and status:', error);
+        updateInterfaceStatus('bg-secondary', 'Unknown');
+    }
+}
+
+function updateConnectionStatus(status, statusText) {
+    const mobileStatus = document.getElementById('connectionStatusMobile');
+    currentSocketStatusClass = status;
+
+    if (mobileStatus) {
+        mobileStatus.className = `badge ${status}`;
+        mobileStatus.textContent = statusText;
+    }
+    updateStatusLight('mobileSocketLight', status);
+    updateStatusLight('desktopSocketLight', status);
+    updateConnectButtons();
+}
+
+function updateInterfaceStatus(status, statusText) {
+    const mobileStatus = document.getElementById('interfaceStatusMobile');
+    currentInterfaceStatusClass = status;
+
+    if (mobileStatus) {
+        mobileStatus.className = `badge ${status}`;
+        mobileStatus.textContent = statusText;
+    }
+    updateStatusLight('mobileInterfaceLight', status);
+    updateStatusLight('desktopInterfaceLight', status);
+    updateConnectButtons();
+}
+
+function updateProfileBanner(profile) {
+    const mobileProfileName = document.getElementById('mobileProfileName');
+    const desktopProfileName = document.getElementById('desktopProfileName');
+
+    if (profile) {
+        if (mobileProfileName) mobileProfileName.textContent = profile.long_name || 'Unknown Profile';
+        if (desktopProfileName) desktopProfileName.textContent = profile.long_name || 'Unknown Profile';
+    } else {
+        if (mobileProfileName) mobileProfileName.textContent = 'No Profile Selected';
+        if (desktopProfileName) desktopProfileName.textContent = 'No Profile Selected';
+    }
+    updateHeaderState();
+    updateConnectButtons();
+}
+
+function refreshProfileBanner() {
+    if (currentProfile) {
+        updateProfileBanner(currentProfile);
+    }
+}
+
+function joinChannelRoom(channelNumber) {
+    if (!socket || channelNumber === null || channelNumber === undefined) return;
+    socket.emit('join_channel', { channel: channelNumber });
+}
+
+function leaveCurrentChannelRoom() {
+    if (!socket || currentChannelRoom === null || currentChannelRoom === undefined) return;
+    socket.emit('leave_channel', { channel: currentChannelRoom });
+    currentChannelRoom = null;
+}
+
+function joinProfileRoom(profileId) {
+    if (!socket || !profileId) return;
+    socket.emit('join_profile', { profile_id: profileId });
+}
+
+function leaveCurrentProfileRoom() {
+    if (!socket || !currentProfileRoom) return;
+    socket.emit('leave_profile', { profile_id: currentProfileRoom });
+    currentProfileRoom = null;
+}
+
+function beginMessageSnapshot() {
+    return {
+        id: ++messageSnapshotRequestId,
+        profile: currentProfile,
+        channelIndex: activeChannelIndex,
+        channelMessages: new Map(channelMessages.map(message => [message.id, message])),
+        dmMessages: new Map(dmMessages.map(message => [message.id, message])),
+    };
+}
+
+function mergeMessageSnapshot(snapshot, current, beforeRequest) {
+    const merged = [...snapshot];
+    // A response can predate a Socket.IO message or ACK update received while
+    // the request was in flight. Keep those events until history catches up.
+    for (const message of current) {
+        if (beforeRequest.get(message.id) !== message) upsertMessage(merged, message);
+    }
+    return merged;
+}
+
+function applyMessageSnapshot(payload, request) {
+    if (request.id !== messageSnapshotRequestId || request.profile !== currentProfile) return false;
+    const channels = Array.isArray(payload) ? payload : (payload.channel_messages || []);
+    const dms = Array.isArray(payload) ? [] : (payload.dm_messages || []);
+    channelMessages = mergeMessageSnapshot(channels, channelMessages, request.channelMessages);
+    dmMessages = mergeMessageSnapshot(dms, dmMessages, request.dmMessages);
+    return true;
+}
+
+async function loadMessages(channelIndex = activeChannelIndex) {
+    const snapshotRequest = beginMessageSnapshot();
+    try {
+        const query = (channelIndex === null || channelIndex === undefined)
+            ? ''
+            : `?channel_index=${encodeURIComponent(channelIndex)}`;
+        const response = await fetch(`/api/messages${query}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!applyMessageSnapshot(payload, snapshotRequest)) return;
+        if (!Array.isArray(payload)) {
+            if (activeChannelIndex === snapshotRequest.channelIndex && Number.isInteger(payload.selected_channel_index)) {
+                activeChannelIndex = payload.selected_channel_index;
+            }
+            applyUnreadState(payload);
+        }
+        reconcileMessageSenderLabelsFromNodes();
+        syncDmTargetsFromMessages();
+    } catch (err) {
+        console.error('Error loading messages:', err);
+    }
+}
+
+async function refreshThreadStateSnapshot() {
+    if (!currentProfile) return;
+    const snapshotRequest = beginMessageSnapshot();
+
+    try {
+        const response = await fetch('/api/messages');
+        const payload = await response.json();
+        if (!response.ok || Array.isArray(payload)) {
+            return;
+        }
+
+        if (!applyMessageSnapshot(payload, snapshotRequest)) return;
+        applyUnreadState(payload);
+        syncDmTargetsFromMessages();
+        await loadDmTargets();
+        renderActiveMessages();
+        updateComposerState();
+    } catch (error) {
+        console.error('Error refreshing thread state:', error);
+    }
+}
+
+function scheduleThreadStateRefresh() {
+    if (pendingThreadStateRefresh !== null) {
+        return;
+    }
+
+    pendingThreadStateRefresh = window.setTimeout(async () => {
+        pendingThreadStateRefresh = null;
+        await refreshThreadStateSnapshot();
+    }, 120);
+}
+
+async function loadNodes() {
+    if (!currentProfile) {
+        meshNodes = [];
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/nodes');
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || `HTTP ${response.status}`);
+        }
+        meshNodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+        reconcileMessageSenderLabelsFromNodes();
+        syncDmTargetsFromMessages();
+        renderActiveMessages();
+        updateComposerState();
+    } catch (error) {
+        console.error('Error loading nodes:', error);
+        meshNodes = [];
+    }
+}
+
+function getGeneratedMeshtasticName(nodeNum) {
+    const normalizedNodeNum = Number(nodeNum);
+    if (!Number.isFinite(normalizedNodeNum)) return '';
+    return `Meshtastic ${normalizedNodeNum.toString(16).padStart(8, '0').slice(-4)}`;
+}
+
+function hasFallbackSenderDisplay(message) {
+    if (!message) return true;
+    const senderDisplay = String(message.sender_display || '').trim();
+    const senderId = String(message.sender || '').trim();
+    const senderDisplayLower = senderDisplay.toLowerCase();
+    const senderIdLower = senderId.toLowerCase();
+    if (!senderDisplay || senderDisplayLower === 'unknown') {
+        return true;
+    }
+    if (senderId && senderDisplayLower === senderIdLower) {
+        return true;
+    }
+    const generatedName = getGeneratedMeshtasticName(message.sender_num);
+    return Boolean(generatedName && senderDisplayLower === generatedName.toLowerCase());
+}
+
+function reconcileMessageSenderLabelsFromNodes() {
+    if (!Array.isArray(meshNodes) || !meshNodes.length) return;
+
+    const nodesByNum = new Map(
+        meshNodes
+            .map(node => [Number(node?.node_num), node])
+            .filter(([nodeNum]) => Number.isFinite(nodeNum))
+    );
+
+    [channelMessages, dmMessages].forEach(collection => {
+        collection.forEach(message => {
+            const node = nodesByNum.get(Number(message?.sender_num));
+            if (!node) return;
+
+            const displayLabel = getNodeDisplayLabel(node);
+            if (node.long_name && hasFallbackSenderDisplay(message)) {
+                message.sender_display = node.long_name;
+            } else if (displayLabel && hasFallbackSenderDisplay(message)) {
+                message.sender_display = displayLabel;
+            }
+
+            if (node.short_name) {
+                message.sender_short_name = node.short_name;
+            }
+        });
+    });
+}
+
+function applyNodeUpdate(payload) {
+    const node = payload && payload.node ? payload.node : payload;
+    const normalizedNodeNum = Number(node?.node_num);
+    if (!Number.isFinite(normalizedNodeNum)) return;
+
+    const existingIndex = meshNodes.findIndex(item => Number(item.node_num) === normalizedNodeNum);
+    if (existingIndex >= 0) {
+        meshNodes[existingIndex] = {
+            ...meshNodes[existingIndex],
+            ...node,
+            node_num: normalizedNodeNum,
+        };
+    } else {
+        meshNodes.push({
+            ...node,
+            node_num: normalizedNodeNum,
+        });
+    }
+
+    const displayLabel = getNodeDisplayLabel(node);
+    [channelMessages, dmMessages].forEach(collection => {
+        collection.forEach(message => {
+            if (Number(message.sender_num) !== normalizedNodeNum) return;
+            if (node.long_name && hasFallbackSenderDisplay(message)) {
+                message.sender_display = node.long_name;
+            } else if (displayLabel && hasFallbackSenderDisplay(message)) {
+                message.sender_display = displayLabel;
+            }
+            if (node.short_name) {
+                message.sender_short_name = node.short_name;
+            }
+        });
+    });
+
+    const hasExistingTarget = dmTargets.some(target => Number(target.node_num) === normalizedNodeNum);
+    const hasRelatedDm = dmMessages.some(message => Number(getPeerNodeNum(message)) === normalizedNodeNum);
+    if (hasExistingTarget || hasRelatedDm) {
+        upsertDmTarget({
+            node_num: normalizedNodeNum,
+            node_id: node.node_id || `!${normalizedNodeNum.toString(16).padStart(8, '0')}`,
+            label: displayLabel,
+            short_name: node.short_name || '',
+        });
+    }
+    syncDmTargetsFromMessages();
+    renderActiveMessages();
+    updateComposerState();
+}
+
+async function loadDmTargets() {
+    if (!currentProfile) {
+        dmTargets = [];
+        renderActiveMessages();
+        return;
+    }
+
+    const fallbackTargets = [];
+    dmMessages.forEach(message => {
+        const fallbackTarget = createDmTargetFromMessage(message);
+        if (fallbackTarget) {
+            fallbackTargets.push(fallbackTarget);
+        }
+    });
+
+    const requestedNodeNums = new Set(
+        dmMessages
+            .map(message => getPeerNodeNum(message))
+            .filter(nodeNum => Number.isFinite(Number(nodeNum)))
+            .map(nodeNum => Number(nodeNum))
+    );
+    if (pendingDmTargetNodeNum) {
+        const pendingNodeNum = Number(pendingDmTargetNodeNum);
+        if (Number.isFinite(pendingNodeNum)) {
+            requestedNodeNums.add(pendingNodeNum);
+            fallbackTargets.push({
+                node_num: pendingNodeNum,
+                node_id: `!${pendingNodeNum.toString(16).padStart(8, '0')}`,
+                label: `!${pendingNodeNum.toString(16).padStart(8, '0')}`,
+                short_name: '',
+            });
+        }
+    }
+
+    const loadedTargets = await Promise.all(
+        Array.from(requestedNodeNums).map(async nodeNum => {
+            try {
+                const response = await fetch(`/api/nodes/${nodeNum}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const node = await response.json();
+                return {
+                    node_num: node.node_num,
+                    node_id: node.node_id,
+                    label: node.long_name || node.short_name || node.node_id || `!${nodeNum.toString(16).padStart(8, '0')}`,
+                    short_name: node.short_name || '',
+                };
+            } catch (err) {
+                console.error(`Error loading DM target ${nodeNum}:`, err);
+                return null;
+            }
+        })
+    );
+
+    dmTargets = fallbackTargets;
+    loadedTargets.filter(target => target !== null).forEach(target => upsertDmTarget(target));
+    syncDmTargetsFromMessages();
+}
+
+function upsertDmTarget(target) {
+    if (!target || target.node_num === null || target.node_num === undefined) return;
+
+    const normalizedNodeNum = Number(target.node_num);
+    if (!Number.isFinite(normalizedNodeNum)) return;
+    const existingIndex = dmTargets.findIndex(node => Number(node.node_num) === normalizedNodeNum);
+    if (existingIndex >= 0) {
+        dmTargets[existingIndex] = {
+            ...dmTargets[existingIndex],
+            ...target,
+            node_num: normalizedNodeNum,
+        };
+    } else {
+        dmTargets.push({
+            ...target,
+            node_num: normalizedNodeNum,
+        });
+    }
+}
+
+function getManagedProfileByNodeNum(nodeNum) {
+    const normalizedNodeNum = Number(nodeNum);
+    if (!Number.isFinite(normalizedNodeNum)) return null;
+
+    return Object.values(managedProfiles || {}).find(profile => {
+        const parsedNodeNum = parseNodeId(profile?.node_id);
+        return parsedNodeNum !== null && Number(parsedNodeNum) === normalizedNodeNum;
+    }) || null;
+}
+
+function createDmTargetFromMessage(message, peerNodeNum = getPeerNodeNum(message)) {
+    if (!peerNodeNum) return null;
+
+    const normalizedNodeNum = Number(peerNodeNum);
+    if (!Number.isFinite(normalizedNodeNum)) return null;
+    const localProfile = getManagedProfileByNodeNum(normalizedNodeNum);
+    return {
+        node_num: normalizedNodeNum,
+        node_id: localProfile?.node_id || (message.sender_num === normalizedNodeNum ? message.sender : message.target),
+        label: getPeerLabel(message, normalizedNodeNum),
+        short_name: localProfile?.short_name || '',
+    };
+}
+
+function syncDmTargetsFromMessages() {
+    dmTargets = dmTargets.filter(target => Number.isFinite(Number(target?.node_num)));
+    dmTargets.forEach(target => {
+        const node = getNodeByNum(target.node_num);
+        if (node) upsertDmTarget({ ...target, label: getNodeDisplayLabel(node), short_name: node.short_name || target.short_name });
+    });
+    dmMessages.forEach(message => {
+        const fallbackTarget = createDmTargetFromMessage(message);
+        if (fallbackTarget) upsertDmTarget(fallbackTarget);
+    });
+    dmTargets = dmTargets.sort((a, b) => (a.label || a.node_id || '').localeCompare(b.label || b.node_id || ''));
+}
+
+async function applyPendingChatContext() {
+    if (pendingDmTargetNodeNum) {
+        setActiveChatTab('dm');
+        setActiveDmTarget(pendingDmTargetNodeNum, false);
+        pendingDmTargetNodeNum = null;
+        return;
+    }
+    if (activeChatTab === 'nodes') {
+        await loadNodes();
+        setActiveChatTab('nodes');
+        return;
+    }
+    if (activeChatTab === 'map') {
+        await loadNodes();
+        setActiveChatTab('map');
+        return;
+    }
+    if (activeChatTab === 'profiles') {
+        await loadManagedProfiles();
+        setActiveChatTab('profiles');
+        return;
+    }
+    if (activeChatTab === 'channel') {
+        if (pendingChannelIndex !== null) {
+            await setActiveChannel(pendingChannelIndex, false);
+            pendingChannelIndex = null;
+            return;
+        }
+
+        const channels = getProfileChannels();
+        if (channels.length <= 1) {
+            activeChannelIndex = channels.length ? (currentProfile?.selected_channel_index ?? 0) : null;
+        } else {
+            activeChannelIndex = null;
+        }
+    }
+
+    setActiveChatTab(activeChatTab);
+}
+
+function openDmInbox() {
+    setActiveChatTab('dm');
+    setActiveDmTarget(null);
+}
+
+async function openNodesInbox() {
+    await loadNodes();
+    setActiveChatTab('nodes');
+}
+
+async function openMapInbox() {
+    await loadNodes();
+    setActiveChatTab('map');
+}
+
+async function openProfilesInbox() {
+    await loadManagedProfiles();
+    const sheet = document.getElementById('mobileSettingsSheet');
+    if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+        bootstrap.Offcanvas.getOrCreateInstance(sheet).hide();
+    }
+    setActiveChatTab('profiles');
+}
+
+function openChannelInbox() {
+    setActiveChatTab('channel');
+    const channels = getProfileChannels();
+    activeChannelIndex = channels.length <= 1 ? 0 : null;
+    updateComposerState();
+    renderActiveMessages();
+    updateChatUrl();
+}
+
+function setActiveChatTab(tab) {
+    const nextTab = ['dm', 'nodes', 'map', 'profiles'].includes(tab) ? tab : 'channel';
+    const enteringNodes = nextTab === 'nodes' && activeChatTab !== 'nodes';
+    if (activeChatTab !== nextTab) {
+        replyingToPacketId = null;
+    }
+    if (nextTab !== 'map') {
+        clearMap();
+    }
+    activeChatTab = nextTab;
+    document.getElementById('channelTabBtn').classList.toggle('active', activeChatTab === 'channel');
+    document.getElementById('dmTabBtn').classList.toggle('active', activeChatTab === 'dm');
+    document.getElementById('nodesTabBtn').classList.toggle('active', activeChatTab === 'nodes');
+    document.getElementById('mapTabBtn').classList.toggle('active', activeChatTab === 'map');
+    document.getElementById('desktopProfilesTabBtn').classList.toggle('active', activeChatTab === 'profiles');
+    document.getElementById('mobileChannelsBtn').classList.toggle('active', activeChatTab === 'channel');
+    document.getElementById('mobileDmsBtn').classList.toggle('active', activeChatTab === 'dm');
+    document.getElementById('mobileNodesBtn').classList.toggle('active', activeChatTab === 'nodes');
+    document.getElementById('mobileMapBtn').classList.toggle('active', activeChatTab === 'map');
+    document.getElementById('mobileProfilesBtn').classList.toggle('active', activeChatTab === 'profiles');
+    updateComposerState();
+    renderActiveMessages();
+    if (enteringNodes) {
+        const container = document.getElementById('messagesContainer');
+        if (container) container.scrollTop = 0;
+        updateNodesBackToTopVisibility(container);
+    }
+    updateChatUrl();
+}
+
+function setActiveDmTarget(nodeNum, updateUrl = true) {
+    if (activeDmTargetNodeNum !== (nodeNum ? Number(nodeNum) : null)) {
+        replyingToPacketId = null;
+    }
+    activeDmTargetNodeNum = nodeNum ? Number(nodeNum) : null;
+    updateComposerState();
+    renderActiveMessages();
+    if (activeDmTargetNodeNum) {
+        void markDmThreadRead(activeDmTargetNodeNum);
+    }
+    if (updateUrl) updateChatUrl();
+}
+
+async function setActiveChannel(channelIndex, updateUrl = true) {
+    const channels = getProfileChannels();
+    if (!channels.length) {
+        activeChannelIndex = null;
+        updateComposerState();
+        renderActiveMessages();
+        if (updateUrl) updateChatUrl();
+        return;
+    }
+
+    const normalizedIndex = Number(channelIndex);
+    if (!Number.isInteger(normalizedIndex) || normalizedIndex < 0 || normalizedIndex >= channels.length) {
+        return;
+    }
+
+    if (
+        activeChannelIndex !== null &&
+        activeChannelIndex !== undefined &&
+        Number(activeChannelIndex) === normalizedIndex &&
+        activeChatTab === 'channel'
+    ) {
+        if (updateUrl) updateChatUrl();
+        return;
+    }
+
+    // Swap the visible conversation from the already-loaded inbox immediately.
+    // Persisting the selected channel is kept in the background so latency does
+    // not make a channel click feel like a message reload.
+    replyingToPacketId = null;
+    const previousChannelRoom = currentChannelRoom;
+    const previousChannelIndex = activeChannelIndex;
+    const previousProfile = currentProfile;
+    activeChannelIndex = normalizedIndex;
+    currentProfile = {
+        ...currentProfile,
+        selected_channel_index: normalizedIndex,
+    };
+    currentChannelRoom = getChannelNumberByIndex(normalizedIndex);
+    setActiveChatTab('channel');
+    updateComposerState();
+    renderActiveMessages();
+    if (updateUrl) updateChatUrl();
+
+    const requestId = ++channelSelectionRequestId;
+    try {
+        const response = await fetch('/api/current-channel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify({ channel_index: normalizedIndex })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        // Ignore an older selection that completed after a newer click.
+        if (requestId !== channelSelectionRequestId) return;
+
+        if (socket && previousChannelRoom !== null && previousChannelRoom !== undefined) {
+            socket.emit('leave_channel', { channel: previousChannelRoom });
+        }
+        currentProfile = data.profile || currentProfile;
+        activeChannelIndex = Number.isInteger(data.selected_channel_index) ? data.selected_channel_index : normalizedIndex;
+        currentChannelRoom = data.channel_number ?? null;
+
+        if (socket && socket.connected && currentChannelRoom !== null) {
+            joinChannelRoom(currentChannelRoom);
+        }
+
+        if (data.interface_status === 'started') {
+            updateInterfaceStatus('bg-success', 'Connected');
+        } else if (data.interface_status === 'failed') {
+            updateInterfaceStatus('bg-danger', 'Failed to Start');
+        }
+        applyUnreadState(data);
+    } catch (error) {
+        console.error('Error selecting channel:', error);
+        if (requestId === channelSelectionRequestId) {
+            // The socket is still subscribed to the previous channel until a
+            // successful response, so return the UI to that known-good state.
+            currentProfile = previousProfile;
+            activeChannelIndex = previousChannelIndex;
+            currentChannelRoom = previousChannelRoom;
+            setActiveChatTab('channel');
+            updateComposerState();
+            renderActiveMessages();
+            if (updateUrl) updateChatUrl();
+            alert('Error selecting channel: ' + error.message);
+        }
+        return;
+    }
+}
+
+function updateComposerState() {
+    const composerBar = document.getElementById('composerBar');
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const replyBar = document.getElementById('replyComposerBar');
+    const replyAuthor = document.getElementById('replyComposerAuthor');
+    const replyPreview = document.getElementById('replyComposerPreview');
+
+    if (activeChatTab === 'nodes' || activeChatTab === 'map' || activeChatTab === 'profiles') {
+        if (composerBar) composerBar.classList.add('d-none');
+        if (replyBar) replyBar.classList.add('d-none');
+        updateHeaderState();
+        return;
+    }
+
+    if (composerBar) composerBar.classList.remove('d-none');
+
+    if (activeChatTab === 'dm') {
+        input.placeholder = activeDmTargetNodeNum ? `Message ${getPeerLabel({}, activeDmTargetNodeNum)}...` : 'Open a DM thread to reply...';
+    } else {
+        const activeChannel = getActiveChannel();
+        input.placeholder = activeChannel ? `Message ${activeChannel.name}...` : 'Open a channel to reply...';
+    }
+
+    sendBtn.textContent = isSendingMessage ? 'Sending…' : 'Send';
+
+    input.disabled = isSendingMessage || (activeChatTab === 'dm' && !activeDmTargetNodeNum) || (activeChatTab === 'channel' && !getActiveChannel());
+    sendBtn.disabled = isSendingMessage || (activeChatTab === 'dm' && !activeDmTargetNodeNum) || (activeChatTab === 'channel' && !getActiveChannel());
+
+    const replyMessage = getMessageByPacketId(replyingToPacketId);
+    if (replyMessage && replyBar && replyAuthor && replyPreview) {
+        replyBar.classList.remove('d-none');
+        replyAuthor.textContent = replyMessage.sender_display || replyMessage.sender || 'message';
+        replyPreview.textContent = truncateText(replyMessage.content || '', 120);
+    } else if (replyBar) {
+        replyBar.classList.add('d-none');
+    }
+
+    updateHeaderState();
+}
+
+function updateCharacterCounter() {
+    const charCount = document.getElementById('charCount');
+    const messageInput = document.getElementById('messageInput');
+    const currentLength = messageInput.value.length;
+    charCount.textContent = `${currentLength}/220`;
+    if (currentLength > 200) {
+        charCount.className = 'text-warning';
+    } else if (currentLength === 220) {
+        charCount.className = 'text-danger';
+    } else {
+        charCount.className = 'text-muted';
+    }
+}
+
+function getVisibleMessages() {
+    if (activeChatTab === 'channel') {
+        if (activeChannelIndex === null || activeChannelIndex === undefined) {
+            return [];
+        }
+        const activeChannelNumber = getChannelNumberByIndex(activeChannelIndex);
+        if (activeChannelNumber === null) {
+            return channelMessages;
+        }
+        return channelMessages.filter(message => normalizeNumber(message.channel) === activeChannelNumber);
+    }
+    if (!activeDmTargetNodeNum) {
+        return [];
+    }
+    return dmMessages.filter(message => Number(getPeerNodeNum(message)) === Number(activeDmTargetNodeNum));
+}
+
+function getActiveUnreadCount() {
+    if (activeChatTab === 'channel') {
+        const activeChannelNumber = getChannelNumberByIndex(activeChannelIndex);
+        return activeChannelNumber === null ? 0 : (unreadChannelMessageCounts.get(activeChannelNumber) || 0);
+    }
+    if (activeChatTab === 'dm') {
+        return activeDmTargetNodeNum ? (unreadDmMessageCounts.get(Number(activeDmTargetNodeNum)) || 0) : 0;
+    }
+    return 0;
+}
+
+function getUnreadDividerIndex(messages, unreadCount) {
+    let remainingUnread = Number(unreadCount) || 0;
+    if (remainingUnread <= 0) return -1;
+
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        if ((message?.direction || 'received') !== 'received') {
+            continue;
+        }
+        remainingUnread -= 1;
+        if (remainingUnread <= 0) {
+            return index;
+        }
+    }
+
+    return messages.length ? 0 : -1;
+}
+
+function renderMessagesWithUnreadDivider(messages, unreadCount) {
+    const dividerIndex = getUnreadDividerIndex(messages, unreadCount);
+    const rendered = [];
+
+    messages.forEach((message, index) => {
+        if (index === dividerIndex) {
+            rendered.push(
+                '<div class="message-unread-divider" aria-label="Unread messages">' +
+                '<span class="message-unread-divider__label">Unread</span>' +
+                '</div>'
+            );
+        }
+        rendered.push(renderMessageHtml(message));
+    });
+
+    return rendered.join('');
+}
+
+function renderActiveMessages() {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return;
+    container.classList.toggle('messages-container--map', activeChatTab === 'map');
+    container.classList.toggle('messages-container--nav-safe', activeChatTab === 'nodes' || activeChatTab === 'profiles');
+
+    if (activeChatTab === 'nodes') {
+        renderNodesList(container);
+        return;
+    }
+
+    if (activeChatTab === 'map') {
+        renderMapView(container);
+        return;
+    }
+
+    if (activeChatTab === 'profiles') {
+        renderProfilesView(container);
+        return;
+    }
+
+    if (activeChatTab === 'channel' && (activeChannelIndex === null || activeChannelIndex === undefined)) {
+        renderChannelThreadList(container);
+        return;
+    }
+
+    if (activeChatTab === 'dm' && !activeDmTargetNodeNum) {
+        renderDmThreadList(container);
+        return;
+    }
+
+    const visibleMessages = getVisibleMessages();
+    const unreadCount = getActiveUnreadCount();
+    if (!visibleMessages.length) {
+        container.innerHTML = `<div class="text-muted small">${activeChatTab === 'channel' ? 'No channel messages yet.' : 'No direct messages in this thread yet.'}</div>`;
+        return;
+    }
+
+    container.innerHTML = renderMessagesWithUnreadDivider(visibleMessages, unreadCount);
+    container.scrollTop = container.scrollHeight;
+    if (unreadCount > 0) {
+        if (activeChatTab === 'channel' && activeChannelIndex !== null && activeChannelIndex !== undefined) {
+            void markCurrentChannelRead(activeChannelIndex);
+        } else if (activeChatTab === 'dm' && activeDmTargetNodeNum) {
+            void markDmThreadRead(activeDmTargetNodeNum);
+        }
+    }
+}
+
+function renderChannelThreadList(container) {
+    const channels = getProfileChannels();
+    if (!channels.length) {
+        container.innerHTML = '<div class="text-muted small">No channels configured yet. Add one from Profiles.</div>';
+        return;
+    }
+
+    const threads = getChannelThreads();
+    container.innerHTML = threads.map(renderChannelThreadCardHtml).join('');
+}
+
+function getChannelThreads() {
+    return getProfileChannels().map((channel, index) => {
+        const channelNumber = getChannelNumberByIndex(index);
+        let latestMessage = null;
+
+        if (channelNumber !== null) {
+            channelMessages.forEach(message => {
+                if (normalizeNumber(message.channel) !== channelNumber) return;
+                if (!latestMessage || getMessageSortTimestamp(message) >= getMessageSortTimestamp(latestMessage)) {
+                    latestMessage = message;
+                }
+            });
+        }
+
+        return {
+            channel,
+            index,
+            channelNumber,
+            latestMessage,
+        };
+    });
+}
+
+function getMessageSenderShortName(message) {
+    if (!message) return '';
+
+    const explicitShortName = (message.sender_short_name || '').trim();
+    if (explicitShortName) {
+        return explicitShortName;
+    }
+
+    if (currentProfile && message.sender === currentProfile.node_id) {
+        return (currentProfile.short_name || '').trim();
+    }
+
+    return '';
+}
+
+function getMessageSenderNodeId(message) {
+    if (!message) return '';
+
+    const explicitSender = String(message.sender || '').trim();
+    if (explicitSender) {
+        return explicitSender;
+    }
+
+    if (currentProfile && message.sender === currentProfile.node_id) {
+        return String(currentProfile.node_id || '').trim();
+    }
+
+    return '';
+}
+
+function getSenderBadgeColor(nodeId) {
+    const cleaned = String(nodeId || '').replace(/[^0-9a-fA-F]/g, '').toLowerCase();
+    const hex = cleaned.length >= 6 ? cleaned.slice(-6) : cleaned.padStart(6, '0');
+    return `#${hex}`;
+}
+
+function getSenderBadgeTextColor(backgroundHex) {
+    const hex = String(backgroundHex || '').replace('#', '');
+    if (hex.length !== 6) {
+        return '#ffffff';
+    }
+
+    const red = parseInt(hex.slice(0, 2), 16);
+    const green = parseInt(hex.slice(2, 4), 16);
+    const blue = parseInt(hex.slice(4, 6), 16);
+    const luminance = ((red * 299) + (green * 587) + (blue * 114)) / 1000;
+    return luminance >= 150 ? '#162231' : '#ffffff';
+}
+
+function getMessageSenderDisplayName(message) {
+    if (!message) return 'Unknown';
+
+    if (currentProfile && message.sender === currentProfile.node_id) {
+        return (currentProfile.long_name || currentProfile.node_id || 'Unknown').trim();
+    }
+
+    return String(message.sender_display || message.sender || 'Unknown').trim();
+}
+
+function formatThreadPreview(message, maxLength = 110, includeSenderShortName = false) {
+    if (!message) return 'No messages yet.';
+
+    const content = (message.content || '').trim();
+    const senderShortName = includeSenderShortName ? getMessageSenderShortName(message) : '';
+    const previewText = senderShortName ? `${senderShortName}: ${content}` : content;
+
+    return truncateText(previewText || 'No messages yet.', maxLength);
+}
+
+function renderThreadUnreadBadge(count, ariaLabel) {
+    const unreadCount = Number(count) || 0;
+    if (unreadCount <= 0) return '';
+    return `<span class="chat-tab-badge thread-card__unread" aria-label="${escapeHtml(ariaLabel)}">${escapeHtml(String(unreadCount))}</span>`;
+}
+
+function renderChannelThreadCardHtml(thread) {
+    const channel = thread.channel;
+    const index = thread.index;
+    const latestMessage = thread.latestMessage;
+    const preview = formatThreadPreview(latestMessage, 110, true);
+    const timestamp = latestMessage ? formatTimestamp(latestMessage.timestamp) : '';
+    const unreadCount = thread.channelNumber === null ? 0 : (unreadChannelMessageCounts.get(thread.channelNumber) || 0);
+    const unreadBadge = renderThreadUnreadBadge(unreadCount, `Unread messages in ${channel.name || `Channel ${index + 1}`}`);
+    return `
+        <div class="dm-thread-card channel-thread-card thread-card__shell" role="button" tabindex="0" data-channel-index="${Number(index)}">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="flex-grow-1 text-start thread-card__content">
+                    <div class="thread-card__headline">
+                        <div class="fw-semibold text-primary text-truncate">${escapeHtml(channel.name || `Channel ${index + 1}`)}</div>
+                        ${unreadBadge}
+                    </div>
+                    <div class="small text-muted mt-1">${escapeHtml(preview)}</div>
+                </div>
+                <div class="thread-card__actions">
+                    <div class="small text-muted text-nowrap">${escapeHtml(timestamp)}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function handleThreadCardClick(event) {
+    const resendTrigger = event.target.closest('[data-resend-message-id]');
+    if (resendTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        void resendMessage(resendTrigger.dataset.resendMessageId, resendTrigger);
+        return;
+    }
+    const removeChannelTrigger = event.target.closest('[data-remove-channel]');
+    if (removeChannelTrigger) {
+        event.preventDefault();
+        const containerId = removeChannelTrigger.dataset.removeChannel;
+        const channelIndex = Number(removeChannelTrigger.dataset.removeChannelIndex);
+        const channelRow = removeChannelTrigger.closest('.channel-editor-row');
+        const channelLabel = channelRow?.querySelector('.channel-name-input')?.value.trim() || `Channel ${channelIndex + 1}`;
+        if (containerId && Number.isInteger(channelIndex) && confirmRemoveProfileChannel(channelLabel)) {
+            removeProfileChannelRow(containerId, channelIndex);
+        }
+        return;
+    }
+
+    const setProfileTrigger = event.target.closest('[data-set-profile-id]');
+    if (setProfileTrigger) {
+        event.preventDefault();
+        void setProfile({ target: setProfileTrigger });
+        return;
+    }
+
+    const editProfileTrigger = event.target.closest('[data-edit-profile-id]');
+    if (editProfileTrigger) {
+        event.preventDefault();
+        openEditProfileModal(editProfileTrigger.dataset.editProfileId);
+        return;
+    }
+
+    const deleteProfileTrigger = event.target.closest('[data-delete-profile-id]');
+    if (deleteProfileTrigger) {
+        event.preventDefault();
+        void deleteManagedProfile(deleteProfileTrigger.dataset.deleteProfileId);
+        return;
+    }
+
+    const deleteDmTrigger = event.target.closest('[data-delete-dm-node-num]');
+    if (deleteDmTrigger) {
+        event.preventDefault();
+        event.stopPropagation();
+        const nodeNum = Number(deleteDmTrigger.dataset.deleteDmNodeNum);
+        if (Number.isInteger(nodeNum)) {
+            void deleteDmThread(nodeNum);
+        }
+        return;
+    }
+
+    const channelCard = event.target.closest('.channel-thread-card');
+    if (channelCard) {
+        const channelIndex = Number(channelCard.dataset.channelIndex);
+        if (Number.isInteger(channelIndex)) {
+            void setActiveChannel(channelIndex);
+        }
+        return;
+    }
+
+    const dmThreadCard = event.target.closest('.dm-thread-card[data-dm-node-num]');
+    if (dmThreadCard) {
+        const nodeNum = Number(dmThreadCard.dataset.dmNodeNum);
+        if (Number.isInteger(nodeNum)) {
+            setActiveDmTarget(nodeNum);
+        }
+        return;
+    }
+
+    const nodeDmTrigger = event.target.closest('.node-dm-trigger');
+    if (nodeDmTrigger) {
+        const nodeNum = Number(nodeDmTrigger.dataset.nodeNum);
+        if (Number.isInteger(nodeNum)) {
+            setActiveChatTab('dm');
+            setActiveDmTarget(nodeNum);
+        }
+        return;
+    }
+
+    const nodeInfoTrigger = event.target.closest('.node-nodeinfo-trigger');
+    if (nodeInfoTrigger) {
+        const nodeNum = Number(nodeInfoTrigger.dataset.nodeNum);
+        if (Number.isInteger(nodeNum)) {
+            void exchangeNodeInfo(nodeNum);
+        }
+        return;
+    }
+
+    const nodeTracerouteTrigger = event.target.closest('.node-traceroute-trigger');
+    if (nodeTracerouteTrigger) {
+        const nodeNum = Number(nodeTracerouteTrigger.dataset.nodeNum);
+        if (Number.isInteger(nodeNum)) {
+            void openTracerouteModal(nodeNum);
+        }
+        return;
+    }
+
+    const backToTopTrigger = event.target.closest('[data-node-back-to-top]');
+    if (backToTopTrigger) {
+        event.preventDefault();
+        const container = document.getElementById('messagesContainer');
+        if (container) {
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+            updateNodesBackToTopVisibility(container);
+        }
+    }
+}
+
+function handleEditChannelListClick(event) {
+    const deleteChannelTrigger = event.target.closest('[data-delete-profile-channel-index]');
+    if (deleteChannelTrigger) {
+        event.preventDefault();
+        const profileId = document.getElementById('editProfileId')?.value || '';
+        const channelIndex = Number(deleteChannelTrigger.dataset.deleteProfileChannelIndex);
+        const channelRow = deleteChannelTrigger.closest('.channel-editor-row');
+        const channelLabel = channelRow?.querySelector('.channel-name-input')?.value.trim() || `Channel ${channelIndex + 1}`;
+        if (profileId && Number.isInteger(channelIndex)) {
+            void deleteProfileChannelThread(profileId, channelIndex, channelLabel);
+        }
+        return;
+    }
+
+    const removeChannelTrigger = event.target.closest('[data-remove-channel]');
+    if (!removeChannelTrigger) return;
+
+    event.preventDefault();
+    const containerId = removeChannelTrigger.dataset.removeChannel;
+    const channelIndex = Number(removeChannelTrigger.dataset.removeChannelIndex);
+    const channelRow = removeChannelTrigger.closest('.channel-editor-row');
+    const channelLabel = channelRow?.querySelector('.channel-name-input')?.value.trim() || `Channel ${channelIndex + 1}`;
+    if (containerId && Number.isInteger(channelIndex) && confirmRemoveProfileChannel(channelLabel)) {
+        removeProfileChannelRow(containerId, channelIndex);
+    }
+}
+
+function confirmRemoveProfileChannel(channelLabel) {
+    const label = channelLabel || 'this channel';
+    return confirm(`Delete ${label} from this profile?`);
+}
+
+async function deleteProfileChannelThread(profileId, channelIndex, channelLabel) {
+    const label = channelLabel || `Channel ${Number(channelIndex) + 1}`;
+    if (!confirm(`Delete all messages for ${label} on this profile?`)) return;
+
+    try {
+        const response = await fetch('/api/threads/channel', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify({
+                profile_id: profileId,
+                channel_index: Number(channelIndex),
+            })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+        if (currentProfile && currentProfile.id === profileId) {
+            await loadMessages(activeChannelIndex);
+            applyUnreadState(data);
+            renderActiveMessages();
+            updateComposerState();
+        }
+    } catch (error) {
+        console.error('Error deleting channel thread:', error);
+        alert('Error deleting channel thread: ' + error.message);
+    }
+}
+
+function handleThreadListInput(event) {
+    if (event.target && event.target.id === 'nodeSearchInput') {
+        nodeSearchQuery = event.target.value || '';
+        updateNodeListFilter();
+    }
+}
+
+function renderDmThreadList(container) {
+    const threads = getDmThreads();
+    if (!threads.length) {
+        container.innerHTML = '<div class="text-muted small">No DM threads yet. Start one from the Nodes tab.</div>';
+        return;
+    }
+
+    container.innerHTML = threads.map(renderDmThreadCardHtml).join('');
+}
+
+function renderNodesList(container) {
+    if (!currentProfile) {
+        container.innerHTML = '<div class="alert alert-warning mb-0"><h5>No Profile Selected</h5><p class="mb-0">Use Profiles to choose a profile before viewing nodes.</p></div>';
+        return;
+    }
+
+    if (!meshNodes.length) {
+        container.innerHTML = '<div class="alert alert-info mb-0"><h5>No Nodes Seen Yet</h5><p class="mb-0">No nodes have been detected on the mesh network for this profile yet.</p></div>';
+        return;
+    }
+
+    const filteredNodes = getFilteredNodes();
+    const searchValue = escapeHtml(nodeSearchQuery);
+
+    container.innerHTML = `
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex flex-column gap-2">
+                    <div class="d-flex justify-content-between align-items-center gap-3">
+                        <small class="text-muted">${meshNodes.length} total</small>
+                    </div>
+                    <input
+                        id="nodeSearchInput"
+                        class="form-control"
+                        type="search"
+                        placeholder="Search nodes"
+                        value="${searchValue}"
+                        autocomplete="off"
+                    >
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="nodeListResults">
+                    ${renderNodeListResults(filteredNodes)}
+                </div>
+            </div>
+        </div>
+        <button
+            class="nodes-back-to-top is-hidden"
+            type="button"
+            aria-label="Back to top"
+            title="Back to top"
+            data-node-back-to-top
+        >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m3.75 10.25 4.25-4.5 4.25 4.5"></path>
+            </svg>
+        </button>
+    `;
+    updateNodesBackToTopVisibility(container);
+}
+
+function renderNodeListResults(nodes) {
+    return nodes.length
+        ? `<div class="node-list">${nodes.map(renderNodeCardHtml).join('')}</div>`
+        : '<div class="text-muted small">No nodes match this search.</div>';
+}
+
+function updateNodesBackToTopVisibility(container = document.getElementById('messagesContainer')) {
+    if (!container) return;
+    const button = container.querySelector('[data-node-back-to-top]');
+    if (!button) return;
+
+    const shouldShow = activeChatTab === 'nodes' && container.scrollTop > 220;
+    button.classList.toggle('is-hidden', !shouldShow);
+}
+
+function updateNodeListFilter() {
+    const results = document.getElementById('nodeListResults');
+    if (!results) {
+        renderActiveMessages();
+        return;
+    }
+    results.innerHTML = renderNodeListResults(getFilteredNodes());
+}
+
+async function loadManagedProfiles() {
+    try {
+        const response = await fetch('/api/profiles');
+        const payload = await response.json();
+        managedProfiles = payload && typeof payload === 'object' ? payload : {};
+    } catch (error) {
+        console.error('Error loading profiles:', error);
+        managedProfiles = {};
+    }
+    syncProfileSelectors();
+}
+
+function syncProfileSelectors() {
+    const options = ['<option value="">Select profile...</option>'];
+    Object.entries(managedProfiles).forEach(([profileId, profile]) => {
+        options.push(`<option value="${escapeHtml(profileId)}">${escapeHtml(profile.long_name || profileId)}</option>`);
+    });
+    const selectedValue = currentProfile?.id || '';
+
+    ['profileSelect'].forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        select.innerHTML = options.join('');
+        select.value = selectedValue;
+    });
+    updateProfileActivationButton();
+}
+
+function renderProfilesView(container) {
+    const profileEntries = Object.entries(managedProfiles);
+    const profileCards = profileEntries.length
+        ? profileEntries.map(([profileId, profile]) => renderManagedProfileCard(profileId, profile)).join('')
+        : `
+            <div class="text-center text-muted">
+                <p class="mb-1">No profiles created yet.</p>
+                <p class="mb-0">Create your first profile to start chatting.</p>
+            </div>
+        `;
+
+    container.innerHTML = `
+        ${!currentProfile ? `<section class="profile-setup-guide" aria-labelledby="profileSetupTitle">
+            <div class="board-eyebrow">${profileEntries.length ? 'NO ACTIVE PROFILE' : 'FIRST-TIME SETUP / STEP 1 OF 2'}</div>
+            <h2 id="profileSetupTitle">${profileEntries.length ? 'Activate a profile to connect' : 'CREATE YOUR FIRST PROFILE_'}</h2>
+            <p>${profileEntries.length ? 'Click Activate next to a profile below to connect to the mesh and open your rooms.' : 'You’re signed in. Before you can use rooms or send messages, you need a Meshtastic profile: your name on the mesh and the channel you want to join.'}</p>
+            ${!profileEntries.length ? '<ol><li>Fill in your long name, short name, and mesh channel name and key below.</li><li>Click Create Profile, then Activate next to your new profile.</li></ol><p>Use the same channel name and key as the mesh you want to talk to. You can create more rooms after activation.</p>' : ''}
+        </section>` : ''}
+        <div class="profile-manager">
+            <div class="profile-manager__grid">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center gap-3">
+                        <h5 class="mb-0">Notifications</h5>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="notificationsToggle">
+                            </div>
+                            <span id="notificationsStatusText" class="badge text-bg-secondary">Disabled</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">User Profiles</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="profilesList">${profileCards}</div>
+                    </div>
+                </div>
+            </div>
+            <details class="profile-manager__create-shell" ${profileEntries.length ? '' : 'open'}>
+                <summary>
+                    <span>Create New Profile</span>
+                </summary>
+                <div class="profile-manager__create-body">
+                    <form id="createProfileForm">
+                        <p class="text-muted">Your node ID is generated from your public key when you create the profile.</p>
+                        <div class="mb-3">
+                            <label for="newLongName" class="form-label">Long Name *</label>
+                            <input type="text" class="form-control" id="newLongName" required maxlength="31" title="Long name must be fewer than 32 characters.">
+                            <div class="form-text">Must be fewer than 32 characters.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newShortName" class="form-label">Short Name *</label>
+                            <input type="text" class="form-control" id="newShortName" required maxlength="4" title="Use 1 emoji without modifiers or 1-4 letters/numbers.">
+                            <div class="form-text">Use 1 emoji without modifiers or 1-4 letters/numbers.</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Channels *</label>
+                                <button class="btn btn-sm btn-outline-secondary" id="addNewChannelBtn" type="button">Add Channel</button>
+                            </div>
+                            <div id="newChannelsList" class="channel-editor-list"></div>
+                            <div class="form-text">Each profile can have multiple channel and key pairs.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newHopLimit" class="form-label">Hop Limit</label>
+                            <input type="number" class="form-control" id="newHopLimit" min="0" max="7" value="3" placeholder="0-7">
+                            <div class="form-text">Number of hops a message can travel (0-7). Default is 3.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Profile</button>
+                    </form>
+                </div>
+            </details>
+        </div>
+    `;
+
+    syncProfileSelectors();
+    document.getElementById('notificationsToggle')?.addEventListener('change', handleNotificationToggleChange);
+    syncNotificationToggleUi();
+    document.getElementById('createProfileForm')?.addEventListener('submit', createManagedProfile);
+    document.getElementById('addNewChannelBtn')?.addEventListener('click', () => addProfileChannelRow('newChannelsList'));
+
+    renderProfileChannelRows('newChannelsList', [{ name: '', key: '' }]);
+    if (!profileEntries.length) {
+        // Put the required first step ahead of optional settings.
+        const manager = container.querySelector('.profile-manager');
+        const createForm = container.querySelector('.profile-manager__create-shell');
+        manager.prepend(createForm);
+    }
+}
+
+function renderManagedProfileCard(profileId, profile) {
+    const channels = Array.isArray(profile.channels) ? profile.channels : [];
+    const channelMarkup = channels.length
+        ? channels.map(channel => `<div>${escapeHtml(channel.name || '')} • ${escapeHtml(channel.key || '')}</div>`).join('')
+        : '<div class="text-muted">No channels configured.</div>';
+
+    return `
+        <div class="profile-item mb-3" data-profile-id="${escapeHtml(profileId)}">
+            <div class="profile-item__content">
+                <h6 class="profile-item__title">${escapeHtml(profile.long_name || profileId)}</h6>
+                <div class="profile-item__meta">
+                    <span>Short: ${escapeHtml(profile.short_name || '')}</span>
+                    <span>Node: ${escapeHtml(profile.node_id || '')}</span>
+                    <span>Hop Limit: ${escapeHtml(String(profile.hop_limit ?? 3))}</span>
+                </div>
+                <div class="profile-item__channels">${channelMarkup}</div>
+                <small class="text-muted profile-item__created">Created: ${escapeHtml(String(profile.created_at || '').slice(0, 10))}</small>
+            </div>
+            <div class="profile-item__actions">
+                <button class="btn btn-success btn-sm" type="button" data-set-profile-id="${escapeHtml(profileId)}">Activate</button>
+                <button class="btn btn-primary btn-sm" type="button" data-edit-profile-id="${escapeHtml(profileId)}">Edit</button>
+                <button class="btn btn-danger btn-sm" type="button" data-delete-profile-id="${escapeHtml(profileId)}">Delete</button>
+            </div>
+        </div>
+    `;
+}
+
+function renderProfileChannelRows(containerId, channels) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const normalized = Array.isArray(channels) && channels.length ? channels : [{ name: '', key: '' }];
+    container.innerHTML = normalized.map((channel, index) => `
+        <div class="channel-editor-row" data-channel-index="${index}" ${Number.isInteger(Number(channel.profile_index)) ? `data-profile-channel-index="${Number(channel.profile_index)}"` : ''}>
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-6">
+                    <label class="form-label small text-muted">Channel Name</label>
+                    <input type="text" class="form-control channel-name-input" maxlength="64" value="${escapeHtml(channel.name || '')}" placeholder="e.g. LongFast">
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label small text-muted">Key</label>
+                    <input type="text" class="form-control channel-key-input" maxlength="256" value="${escapeHtml(channel.key || '')}" placeholder="e.g. AQ==">
+                </div>
+            </div>
+            <div class="channel-editor-row__footer">
+                ${containerId === 'editChannelsList' && Number.isInteger(Number(channel.profile_index)) ? `
+                    <button class="btn btn-outline-danger btn-sm channel-editor-row__action" type="button" data-delete-profile-channel-index="${Number(channel.profile_index)}">Delete Message History</button>
+                ` : ''}
+                <button class="btn btn-outline-danger btn-sm channel-editor-row__action" type="button" data-remove-channel="${containerId}" data-remove-channel-index="${index}">Delete Channel</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function addProfileChannelRow(containerId) {
+    const channels = collectProfileChannels(containerId, false);
+    channels.push({ name: '', key: '' });
+    renderProfileChannelRows(containerId, channels);
+}
+
+function removeProfileChannelRow(containerId, index) {
+    const channels = collectProfileChannels(containerId, false).filter((_, rowIndex) => rowIndex !== index);
+    renderProfileChannelRows(containerId, channels);
+}
+
+function collectProfileChannels(containerId, requireValues = true) {
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+
+    const rows = Array.from(container.querySelectorAll('.channel-editor-row'));
+    const channels = rows.map(row => ({
+        name: row.querySelector('.channel-name-input')?.value.trim() || '',
+        key: row.querySelector('.channel-key-input')?.value.trim() || '',
+        ...(Number.isInteger(Number(row.dataset.profileChannelIndex))
+            ? { profile_index: Number(row.dataset.profileChannelIndex) }
+            : {}),
+    }));
+    const filtered = channels.filter(channel => channel.name || channel.key);
+    return requireValues ? filtered.filter(channel => channel.name && channel.key) : filtered;
+}
+
+function utf8ByteLength(value) {
+    return new TextEncoder().encode(String(value || '')).length;
+}
+
+function isSimpleEmojiCodePoint(codePoint) {
+    if (!Number.isInteger(codePoint)) return false;
+    return (
+        (codePoint >= 0x2600 && codePoint <= 0x26FF) ||
+        (codePoint >= 0x2700 && codePoint <= 0x27BF) ||
+        (codePoint >= 0x1F300 && codePoint <= 0x1F5FF) ||
+        (codePoint >= 0x1F600 && codePoint <= 0x1F64F) ||
+        (codePoint >= 0x1F680 && codePoint <= 0x1F6FF) ||
+        (codePoint >= 0x1F900 && codePoint <= 0x1F9FF) ||
+        (codePoint >= 0x1FA70 && codePoint <= 0x1FAFF)
+    );
+}
+
+function isSingleSimpleEmoji(value) {
+    const glyphs = Array.from(String(value || ''));
+    if (glyphs.length !== 1) return false;
+    const codePoint = glyphs[0].codePointAt(0);
+    return isSimpleEmojiCodePoint(codePoint) && utf8ByteLength(glyphs[0]) <= 4;
+}
+
+function isValidChannelKey(channelKey) {
+    const normalized = String(channelKey || '').trim().replace(/-/g, '+').replace(/_/g, '/');
+    if (!normalized) return false;
+
+    let decoded;
+    try {
+        decoded = Uint8Array.from(atob(normalized), char => char.charCodeAt(0));
+    } catch {
+        return false;
+    }
+    return decoded.length === 1 || decoded.length === 16 || decoded.length === 32;
+}
+
+function validateNewChannelKeys(channels) {
+    const list = Array.isArray(channels) ? channels : [];
+    for (let index = 0; index < list.length; index += 1) {
+        if (!isValidChannelKey(list[index]?.key)) {
+            return `Channel ${index + 1} key must be base64 for 1 byte, 128 bits, or 256 bits.`;
+        }
+    }
+    return '';
+}
+
+function validateProfileIdentityFields({ long_name: longName, short_name: shortName }) {
+    if (Array.from(longName || '').length >= 32) {
+        return 'Long name must be fewer than 32 characters.';
+    }
+
+    const shortValue = String(shortName || '');
+    const isAlphanumericShortName = /^[A-Za-z0-9]{1,4}$/.test(shortValue) && utf8ByteLength(shortValue) <= 4;
+    const isSingleEmojiShortName = isSingleSimpleEmoji(shortValue);
+    if (!isAlphanumericShortName && !isSingleEmojiShortName) {
+        return 'Short name must be 1 emoji without modifiers or 1-4 alphanumeric characters.';
+    }
+
+    return '';
+}
+
+async function createManagedProfile(event) {
+    event.preventDefault();
+
+    const hopLimitValue = document.getElementById('newHopLimit')?.value;
+    const hopLimit = hopLimitValue === '' ? 3 : parseInt(hopLimitValue, 10);
+    if (hopLimit < 0 || hopLimit > 7) {
+        alert('Hop limit must be between 0 and 7');
+        return;
+    }
+
+    const payload = {
+        long_name: document.getElementById('newLongName')?.value.trim(),
+        short_name: document.getElementById('newShortName')?.value.trim(),
+        channels: collectProfileChannels('newChannelsList'),
+        hop_limit: hopLimit,
+    };
+
+    if (!payload.long_name || !payload.short_name || !payload.channels.length) {
+        alert('All fields are required, including at least one complete channel.');
+        return;
+    }
+
+    const identityValidationError = validateProfileIdentityFields(payload);
+    if (identityValidationError) {
+        alert(identityValidationError);
+        return;
+    }
+    const channelValidationError = validateNewChannelKeys(payload.channels);
+    if (channelValidationError) {
+        alert(channelValidationError);
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        await loadManagedProfiles();
+        renderActiveMessages();
+    } catch (error) {
+        console.error('Error creating profile:', error);
+        alert(`Error creating profile: ${error.message}`);
+    }
+}
+
+function openEditProfileModal(profileId) {
+    const profile = managedProfiles[profileId];
+    if (!profile) {
+        alert('Profile not found');
+        return;
+    }
+
+    document.getElementById('editProfileId').value = profileId;
+    document.getElementById('editNodeId').value = profile.node_id || '';
+    document.getElementById('editLongName').value = profile.long_name || '';
+    document.getElementById('editShortName').value = profile.short_name || '';
+    document.getElementById('editHopLimit').value = profile.hop_limit !== undefined ? profile.hop_limit : 3;
+    renderProfileChannelRows(
+        'editChannelsList',
+        (profile.channels || [{ name: '', key: '' }]).map((channel, index) => ({
+            ...channel,
+            profile_index: index,
+        }))
+    );
+    new bootstrap.Modal(document.getElementById('editProfileModal')).show();
+}
+
+async function updateManagedProfile() {
+    const profileId = document.getElementById('editProfileId').value;
+    const hopLimitValue = document.getElementById('editHopLimit').value;
+    const hopLimit = hopLimitValue === '' ? 3 : parseInt(hopLimitValue, 10);
+
+    if (hopLimit < 0 || hopLimit > 7) {
+        alert('Hop limit must be between 0 and 7');
+        return;
+    }
+
+    const payload = {
+        long_name: document.getElementById('editLongName').value.trim(),
+        short_name: document.getElementById('editShortName').value.trim(),
+        channels: collectProfileChannels('editChannelsList'),
+        hop_limit: hopLimit,
+    };
+
+    if (!payload.long_name || !payload.short_name || !payload.channels.length) {
+        alert('All fields are required, including at least one complete channel.');
+        return;
+    }
+
+    const identityValidationError = validateProfileIdentityFields(payload);
+    if (identityValidationError) {
+        alert(identityValidationError);
+        return;
+    }
+
+    const channelValidationError = validateNewChannelKeys(payload.channels);
+    if (channelValidationError) {
+        alert(channelValidationError);
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/profiles/${profileId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        bootstrap.Modal.getInstance(document.getElementById('editProfileModal'))?.hide();
+        await loadManagedProfiles();
+        await loadCurrentProfileAndStatus();
+        await loadMessages();
+        await loadDmTargets();
+        await loadNodes();
+        renderActiveMessages();
+        updateComposerState();
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        alert(`Error updating profile: ${error.message}`);
+    }
+}
+
+async function deleteManagedProfile(profileId) {
+    const profile = managedProfiles[profileId];
+    if (!profile) {
+        alert('Profile not found');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to delete the profile "${profile.long_name}"? This action cannot be undone.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/profiles/${profileId}`, { method: 'DELETE', headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content } });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        await loadManagedProfiles();
+        await loadCurrentProfileAndStatus();
+        await loadMessages();
+        await loadDmTargets();
+        await loadNodes();
+        renderActiveMessages();
+        updateComposerState();
+    } catch (error) {
+        console.error('Error deleting profile:', error);
+        alert(`Error deleting profile: ${error.message}`);
+    }
+}
+
+function renderMapView(container) {
+    if (!currentProfile) {
+        container.innerHTML = '<div class="alert alert-warning mb-0"><h5>No Profile Selected</h5><p class="mb-0">Use Profiles to choose a profile before viewing node positions.</p></div>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="map-panel">
+            <div id="nodeMapStatus" class="alert alert-secondary mb-0 d-none" role="status"></div>
+            <div id="nodeMap" class="node-map" aria-label="Map of known node positions"></div>
+        </div>
+    `;
+
+    const positionedNodes = meshNodes.filter(hasRenderableLocation);
+    const mapStatus = document.getElementById('nodeMapStatus');
+    if (!positionedNodes.length) {
+        mapStatus.className = 'alert alert-info mb-0';
+        mapStatus.textContent = 'Node markers will appear here after this profile hears position packets.';
+        mapStatus.classList.remove('d-none');
+        clearMap();
+        return;
+    }
+
+    mapStatus.classList.add('d-none');
+    window.requestAnimationFrame(() => renderMap(positionedNodes));
+}
+
+function clearMap() {
+    if (mapLayerGroup) {
+        mapLayerGroup.clearLayers();
+    }
+    if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
+        mapLayerGroup = null;
+    }
+}
+
+function renderMap(nodes) {
+    const mapElement = document.getElementById('nodeMap');
+    if (!mapElement || typeof L === 'undefined') return;
+
+    clearMap();
+    mapInstance = L.map(mapElement, {
+        zoomControl: true,
+        attributionControl: true,
+    });
+
+    const baseLayers = buildMapBaseLayers();
+    const defaultLayer = baseLayers['OpenStreetMap'];
+    defaultLayer.addTo(mapInstance);
+    L.control.layers(baseLayers, null, { position: 'topright', collapsed: true }).addTo(mapInstance);
+
+    mapLayerGroup = L.layerGroup().addTo(mapInstance);
+    const bounds = [];
+
+    nodes.forEach(node => {
+        const lat = Number(node.latitude);
+        const lng = Number(node.longitude);
+        const shortName = (node.short_name || '?').trim() || '?';
+        const label = escapeHtml(shortName.slice(0, 4));
+        const markerColors = getNodeMarkerColors(node);
+        const marker = L.marker([lat, lng], {
+            icon: L.divIcon({
+                className: 'map-node-icon',
+                html: `<span class="map-node-badge" style="--node-color: ${markerColors.background}; --node-text-color: ${markerColors.foreground};">${label}</span>`,
+                iconSize: [44, 44],
+                iconAnchor: [22, 22],
+            }),
+            title: node.long_name || node.node_id || shortName,
+        });
+
+        const popupLines = [
+            `<div class="fw-semibold">${escapeHtml(node.long_name || shortName)}</div>`,
+            `<div class="small text-muted">${escapeHtml(node.node_id || `!${Number(node.node_num).toString(16).padStart(8, '0')}`)}</div>`,
+        ];
+        if (node.position_timestamp) {
+            popupLines.push(`<div class="small mt-1">Updated ${escapeHtml(formatPositionTime(node.position_timestamp))}</div>`);
+        }
+        marker.bindPopup(popupLines.join(''));
+        marker.addTo(mapLayerGroup);
+        bounds.push([lat, lng]);
+    });
+
+    if (bounds.length === 1) {
+        mapInstance.setView(bounds[0], 13);
+    } else {
+        mapInstance.fitBounds(bounds, { padding: [24, 24] });
+    }
+
+    window.requestAnimationFrame(() => mapInstance?.invalidateSize());
+}
+
+function buildMapBaseLayers() {
+    return {
+        'OpenStreetMap': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors',
+        }),
+        'Carto Voyager': L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20,
+            subdomains: 'abcd',
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        }),
+        'Topo': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: '&copy; OpenStreetMap contributors, SRTM | Map style: &copy; OpenTopoMap',
+        }),
+        'Dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20,
+            subdomains: 'abcd',
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        }),
+    };
+}
+
+function formatPositionTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+    return date.toLocaleString();
+}
+
+function hasRenderableLocation(node) {
+    if (!node) return false;
+    if (node.latitude === null || node.latitude === undefined || node.longitude === null || node.longitude === undefined) {
+        return false;
+    }
+    if (node.latitude === '' || node.longitude === '') {
+        return false;
+    }
+
+    const lat = Number(node.latitude);
+    const lng = Number(node.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng);
+}
+
+function getNodeMarkerColors(node) {
+    const cleaned = String(node?.node_id || '')
+        .replace(/[^0-9a-f]/gi, '')
+        .toLowerCase();
+    const hex = cleaned.slice(-6).padStart(6, '0');
+    const background = `#${hex}`;
+    const red = parseInt(hex.slice(0, 2), 16);
+    const green = parseInt(hex.slice(2, 4), 16);
+    const blue = parseInt(hex.slice(4, 6), 16);
+    const brightness = ((red * 299) + (green * 587) + (blue * 114)) / 1000;
+    return {
+        background,
+        foreground: brightness > 160 ? '#162231' : '#ffffff',
+    };
+}
+
+function getFilteredNodes() {
+    const query = nodeSearchQuery.trim().toLowerCase();
+    if (!query) return meshNodes;
+
+    return meshNodes.filter(node => {
+        const haystack = [
+            node.long_name,
+            node.short_name,
+            node.node_id,
+            node.hw_model,
+            node.role,
+            node.node_num,
+        ]
+            .filter(value => value !== null && value !== undefined)
+            .map(value => String(value).toLowerCase())
+            .join(' ');
+
+        return haystack.includes(query);
+    });
+}
+
+function getDmThreads() {
+    const threadMap = new Map();
+
+    dmTargets.forEach(target => {
+        threadMap.set(Number(target.node_num), {
+            target,
+            latestMessage: null,
+        });
+    });
+
+    dmMessages.forEach(message => {
+        const peerNodeNum = getPeerNodeNum(message);
+        if (!peerNodeNum) return;
+
+        const normalizedNodeNum = Number(peerNodeNum);
+        const existing = threadMap.get(normalizedNodeNum);
+        const fallbackTarget = existing?.target || createDmTargetFromMessage(message, normalizedNodeNum);
+        const currentLatest = existing?.latestMessage || null;
+        const nextLatest = !currentLatest || getMessageSortTimestamp(message) >= getMessageSortTimestamp(currentLatest)
+            ? message
+            : currentLatest;
+
+        threadMap.set(normalizedNodeNum, {
+            target: fallbackTarget,
+            latestMessage: nextLatest,
+        });
+    });
+
+    return Array.from(threadMap.values())
+        .filter(thread => thread.target)
+        .sort((a, b) => {
+            const aTime = getMessageSortTimestamp(a.latestMessage);
+            const bTime = getMessageSortTimestamp(b.latestMessage);
+            return bTime - aTime;
+        });
+}
+
+function renderDmThreadCardHtml(thread) {
+    const target = thread.target;
+    const latestMessage = thread.latestMessage;
+    const preview = formatThreadPreview(latestMessage, 110, true);
+    const timestamp = latestMessage ? formatTimestamp(latestMessage.timestamp) : '';
+    const unreadCount = unreadDmMessageCounts.get(Number(target.node_num)) || 0;
+    const unreadBadge = renderThreadUnreadBadge(unreadCount, `Unread messages from ${target.label || target.node_id || 'Unknown'}`);
+
+    return `
+        <div class="dm-thread-card thread-card__shell" role="button" tabindex="0" data-dm-node-num="${Number(target.node_num)}">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="flex-grow-1 text-start thread-card__content">
+                    <div class="thread-card__headline">
+                        <div class="fw-semibold text-primary text-truncate">${escapeHtml(target.label || target.node_id || 'Unknown')}</div>
+                        ${unreadBadge}
+                    </div>
+                    <div class="small text-muted mt-1">${escapeHtml(preview)}</div>
+                </div>
+                <div class="thread-card__actions">
+                    <div class="small text-muted text-nowrap">${escapeHtml(timestamp)}</div>
+                    <button
+                        class="btn btn-sm btn-outline-danger thread-card__delete"
+                        type="button"
+                        data-delete-dm-node-num="${Number(target.node_num)}"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderNodeCardHtml(node) {
+    const lastSeen = formatNodeLastSeen(node.last_seen);
+    const rawNodeId = node.node_id || `!${Number(node.node_num).toString(16).padStart(8, '0')}`;
+    const nodeId = escapeHtml(rawNodeId);
+    const shortName = (node.short_name || '?').trim() || '?';
+    const shortNameBadgeColor = getSenderBadgeColor(rawNodeId);
+    const shortNameBadgeTextColor = getSenderBadgeTextColor(shortNameBadgeColor);
+    return `
+        <div class="node-card">
+            <div class="node-card__header">
+                <div class="node-card__title">
+                    <div class="node-card__name-line">
+                        <span class="message__sender-pill node-card__short-pill" style="background-color: ${escapeHtml(shortNameBadgeColor)}; color: ${escapeHtml(shortNameBadgeTextColor)};">${escapeHtml(shortName)}</span>
+                        <div class="node-card__name">${escapeHtml(node.long_name || 'Unknown')}</div>
+                    </div>
+                    <div class="node-card__meta">
+                        <code class="text-primary">${nodeId}</code>
+                        <code>${escapeHtml(String(node.node_num || 'Unknown'))}</code>
+                        <span>${escapeHtml(node.hw_model || 'Unknown')}</span>
+                    </div>
+                </div>
+                <span class="badge bg-info">${escapeHtml(node.role || 'CLIENT')}</span>
+            </div>
+            <div class="node-card__facts">
+                <div class="node-card__fact">
+                    <span class="node-card__label">Last Heard</span>
+                    <div class="node-card__value text-muted">${lastSeen}</div>
+                </div>
+                <div class="node-card__fact">
+                    <span class="node-card__label">Hops</span>
+                    <div class="node-card__value">${formatNodeHopsBadge(node.hops_away)}</div>
+                </div>
+            </div>
+            <div class="node-card__actions">
+                <button class="btn btn-sm node-dm-trigger" type="button" data-node-num="${Number(node.node_num)}">DM</button>
+                <button class="btn btn-sm node-nodeinfo-trigger" type="button" data-node-num="${Number(node.node_num)}">Exchange Node Info</button>
+                <button class="btn btn-sm node-traceroute-trigger" type="button" data-node-num="${Number(node.node_num)}">Traceroute</button>
+            </div>
+        </div>
+    `;
+}
+
+function getMessageSortTimestamp(message) {
+    if (!message || !message.timestamp) return 0;
+    const rawTimestamp = message.timestamp;
+    if (typeof rawTimestamp === 'number') {
+        return rawTimestamp > 1e10 ? rawTimestamp : rawTimestamp * 1000;
+    }
+    const parsed = Date.parse(rawTimestamp);
+    return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function renderMessageHtml(message) {
+    const isOwnMessage = currentProfile && message.sender === currentProfile.node_id;
+    const showYouBadge = isOwnMessage && message.message_type !== 'dm';
+    const timestamp = formatTimestamp(message.timestamp);
+    const ackBadge = renderAckStatusHtml(message);
+    const replyPreview = renderReplyPreview(message);
+    const messageContentHtml = renderMessageContentHtml(message.content || '');
+    const senderShortName = getMessageSenderShortName(message);
+    const senderNodeId = getMessageSenderNodeId(message);
+    const senderDisplayName = getMessageSenderDisplayName(message);
+    const senderBadgeColor = getSenderBadgeColor(senderNodeId);
+    const senderBadgeTextColor = getSenderBadgeTextColor(senderBadgeColor);
+    const senderShortNameBadge = senderShortName
+        ? `<span class="message__sender-pill" style="background-color: ${escapeHtml(senderBadgeColor)}; color: ${escapeHtml(senderBadgeTextColor)};">${escapeHtml(senderShortName)}</span>`
+        : '';
+    const replyButton = message.packet_id ? `
+        <button class="reply-trigger" type="button" onclick="startReply(${message.packet_id})" aria-label="Reply" title="Reply">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.25 4.25 2.75 7.75l3.5 3.5"/>
+                <path d="M3.25 7.75h6.1c2.04 0 3.4 1.36 3.4 3.4v.6"/>
+            </svg>
+        </button>
+    ` : '';
+
+    return `
+        <div class="message">
+            <div class="message__layout">
+                <div class="message__body">
+                    <div class="message__sender-line">
+                        ${senderShortNameBadge}
+                        <strong class="${isOwnMessage ? 'text-primary' : 'text-info'}">${escapeHtml(senderDisplayName)}</strong>
+                        <small class="text-muted">(${escapeHtml(senderNodeId || 'Unknown')})</small>
+                        ${showYouBadge ? '<span class="badge bg-primary ms-1">You</span>' : ''}
+                    </div>
+                    ${replyPreview}
+                    <div class="message__content">${messageContentHtml}</div>
+                </div>
+                <div class="message__meta">
+                    <div class="message__meta-top">
+                        ${ackBadge}
+                        <small class="message__timestamp text-muted">${timestamp}</small>
+                    </div>
+                    ${replyButton}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function applyMessageUpdate(message) {
+    const messageType = message.message_type || 'channel';
+    if (messageType === 'dm') {
+        upsertMessage(dmMessages, message);
+    } else {
+        upsertMessage(channelMessages, message);
+    }
+    renderActiveMessages();
+    updateComposerState();
+    scheduleThreadStateRefresh();
+}
+
+function addIncomingMessage(message) {
+    const messageType = message.message_type || 'channel';
+    const isOwnMessage = Boolean(
+        ((message.direction || '').toLowerCase() === 'sent')
+        || (currentProfile && message.sender === currentProfile.node_id)
+    );
+
+    if (messageType === 'dm') {
+        const inserted = upsertMessage(dmMessages, message);
+        const fallbackTarget = createDmTargetFromMessage(message);
+        if (fallbackTarget) upsertDmTarget(fallbackTarget);
+        syncDmTargetsFromMessages();
+        void loadDmTargets();
+        if (inserted && !isOwnMessage) {
+            const peerNodeNum = getPeerNodeNum(message);
+            if (peerNodeNum) {
+                if (isViewingDmThread(peerNodeNum)) {
+                    void markDmThreadRead(peerNodeNum);
+                } else {
+                    incrementUnreadCount(unreadDmMessageCounts, peerNodeNum);
+                }
+            }
+            notifyForIncomingMessage(message);
+        }
+    } else {
+        const inserted = upsertMessage(channelMessages, message);
+        if (inserted && !isOwnMessage) {
+            const channelNumber = normalizeNumber(message.channel);
+            if (channelNumber !== null) {
+                incrementUnreadCount(unreadChannelMessageCounts, channelNumber);
+            }
+            notifyForIncomingMessage(message);
+        }
+    }
+    renderActiveMessages();
+    updateComposerState();
+    scheduleThreadStateRefresh();
+}
+
+async function deleteDmThread(nodeNum) {
+    const target = dmTargets.find(item => Number(item.node_num) === Number(nodeNum));
+    const label = target?.label || target?.node_id || `!${Number(nodeNum).toString(16).padStart(8, '0')}`;
+    if (!confirm(`Delete the DM thread with ${label}?`)) return;
+
+    try {
+        const response = await fetch('/api/threads/dm', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify({ peer_node_num: Number(nodeNum) })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+        dmMessages = dmMessages.filter(message => Number(getPeerNodeNum(message)) !== Number(nodeNum));
+        dmTargets = dmTargets.filter(item => Number(item.node_num) !== Number(nodeNum));
+        clearUnreadCount(unreadDmMessageCounts, nodeNum);
+        if (Number(activeDmTargetNodeNum) === Number(nodeNum)) {
+            setActiveDmTarget(null);
+        }
+        renderActiveMessages();
+        updateComposerState();
+    } catch (error) {
+        console.error('Error deleting DM thread:', error);
+        alert('Error deleting DM thread: ' + error.message);
+    }
+}
+
+function upsertMessage(list, message) {
+    if (!message || !message.id) {
+        list.push(message);
+        return true;
+    }
+    const existingIndex = list.findIndex(item => item.id === message.id);
+    if (existingIndex >= 0) {
+        list[existingIndex] = message;
+        return false;
+    } else {
+        list.push(message);
+        return true;
+    }
+}
+
+function selectedProfileIsActive() {
+    const selected = document.getElementById('profileSelect')?.value;
+    return Boolean(currentProfile?.id && selected === String(currentProfile.id));
+}
+
+function updateProfileActivationButton() {
+    const button = document.getElementById('setProfileBtn');
+    if (!button || button.dataset.profileBusy === 'true') return;
+    button.disabled = !document.getElementById('profileSelect')?.value;
+    button.textContent = selectedProfileIsActive() ? 'Deactivate' : 'Activate';
+}
+
+async function handleProfileSelectionChange() {
+    updateProfileActivationButton();
+    if (!document.getElementById('profileSelect')?.value) await openProfilesInbox();
+}
+
+async function setProfile(event) {
+    const clickedButton = event ? event.target : null;
+    const isDesktopConnectButton = clickedButton && clickedButton.id === 'desktopConnectBtn';
+    const isMobileConnectButton = clickedButton && clickedButton.id === 'mobileConnectBtn';
+    const directProfileId = clickedButton?.dataset?.setProfileId || '';
+    const isConnectButton = isDesktopConnectButton || isMobileConnectButton;
+    const requestedSelectId = event && event.profileSelectId ? event.profileSelectId : 'profileSelect';
+    const selectedProfileId = document.getElementById(requestedSelectId)?.value || '';
+    const deactivate = clickedButton?.id === 'setProfileBtn' && selectedProfileIsActive();
+    const profileId = deactivate ? '' : directProfileId || (isDesktopConnectButton
+        ? (currentProfile?.id || '')
+        : (isMobileConnectButton
+            ? (document.getElementById('profileSelect')?.value || currentProfile?.id || '')
+            : selectedProfileId));
+    const setBtn = isDesktopConnectButton
+        ? document.getElementById('desktopConnectBtn')
+        : (isMobileConnectButton ? document.getElementById('mobileConnectBtn') : (clickedButton || document.getElementById('setProfileBtn')));
+
+    if (!setBtn) return;
+    if (!profileId && !deactivate) {
+        updateProfileActivationButton();
+        await openProfilesInbox();
+        return;
+    }
+
+    setBtn.dataset.profileBusy = 'true';
+    setBtn.disabled = true;
+    setBtn.textContent = deactivate ? 'Deactivating…' : (isConnectButton ? 'Reconnecting...' : 'Activating…');
+
+    try {
+        const response = await fetch('/api/current-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify({ profile_id: profileId || null })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        leaveCurrentChannelRoom();
+        leaveCurrentProfileRoom();
+
+        currentProfile = data.profile || null;
+        channelMessages = data.channel_messages || data.messages || [];
+        dmMessages = data.dm_messages || [];
+        activeChannelIndex = Number.isInteger(data.selected_channel_index) ? data.selected_channel_index : 0;
+        activeDmTargetNodeNum = null;
+        replyingToPacketId = null;
+        applyUnreadState(data);
+
+        if (currentProfile) {
+            currentChannelRoom = data.channel_number ?? null;
+            currentProfileRoom = currentProfile.id;
+            if (socket && socket.connected) {
+                if (currentChannelRoom !== null) joinChannelRoom(currentChannelRoom);
+                joinProfileRoom(currentProfileRoom);
+            }
+        }
+
+        updateProfileBanner(currentProfile);
+        syncProfileSelectors();
+        await loadDmTargets();
+        await loadNodes();
+        await applyPendingChatContext();
+
+        if (data.interface_status === 'started') {
+            updateInterfaceStatus('bg-success', 'Connected');
+        } else if (data.interface_status === 'failed') {
+            updateInterfaceStatus('bg-danger', 'Failed to Start');
+            if (data.warning) alert('Warning: ' + data.warning);
+        } else if (data.interface_status === 'conflict') {
+            updateInterfaceStatus('bg-warning', 'Profile Conflict');
+            if (data.warning) alert('Warning: ' + data.warning);
+        } else if (data.interface_status === 'stopped') {
+            updateInterfaceStatus('bg-secondary', 'Stopped');
+        } else {
+            updateInterfaceStatus('bg-warning', 'Not Started');
+        }
+
+        renderActiveMessages();
+
+        if (setBtn.id === 'setProfileBtn') {
+            closeProfileSelector();
+        }
+
+        if (currentProfile && data.unread_count !== undefined) {
+            if (data.unread_count > 0) {
+                showNotification(
+                    `Switched to ${currentProfile.long_name}. ${data.unread_count} unread channel message${data.unread_count === 1 ? '' : 's'} loaded.`,
+                    'success',
+                    5000
+                );
+            } else {
+                showNotification(
+                    `Switched to ${currentProfile.long_name}. No unread channel messages.`,
+                    'info',
+                    3000
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Error setting profile:', error);
+        alert('Error setting profile: ' + error.message);
+    } finally {
+        delete setBtn.dataset.profileBusy;
+        setBtn.disabled = false;
+        if (setBtn.id === 'setProfileBtn') {
+            if (deactivate && !currentProfile) document.getElementById('profileSelect').value = selectedProfileId;
+            updateProfileActivationButton();
+        } else {
+            updateConnectButtons();
+        }
+    }
+}
+
+async function reconnectProfile(button) {
+    if (!button || !currentProfile) return;
+
+    button.disabled = true;
+    button.textContent = 'Reconnecting...';
+
+    try {
+        if (socket) {
+            try {
+                socket.disconnect();
+                socket.connect();
+            } catch (socketError) {
+                console.error('Error reconnecting socket:', socketError);
+            }
+        }
+
+        const response = await fetch('/api/reconnect-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        currentProfile = data.profile || currentProfile;
+        channelMessages = data.channel_messages || channelMessages;
+        dmMessages = data.dm_messages || dmMessages;
+        if (Number.isInteger(data.selected_channel_index)) {
+            activeChannelIndex = data.selected_channel_index;
+        }
+        applyUnreadState(data);
+        syncProfileSelectors();
+        await loadDmTargets();
+        await loadNodes();
+
+        if (data.interface_status === 'started') {
+            updateInterfaceStatus('bg-success', 'Connected');
+        } else if (data.interface_status === 'conflict') {
+            updateInterfaceStatus('bg-warning', 'Profile Conflict');
+            if (data.warning) alert('Warning: ' + data.warning);
+        } else if (data.interface_status === 'failed') {
+            updateInterfaceStatus('bg-danger', 'Failed to Start');
+            if (data.warning) alert('Warning: ' + data.warning);
+        } else {
+            updateInterfaceStatus('bg-success', 'Connected');
+        }
+
+        renderActiveMessages();
+        updateComposerState();
+    } catch (error) {
+        console.error('Error reconnecting profile:', error);
+        updateInterfaceStatus('bg-danger', 'Failed to Start');
+        alert('Error reconnecting profile: ' + error.message);
+    } finally {
+        button.disabled = false;
+        updateConnectButtons();
+    }
+}
+
+async function sendMessage() {
+    // The button can be disabled, but Enter can still invoke this function.
+    // Keep a separate in-flight guard so only one request may be sent at once.
+    if (isSendingMessage) return;
+
+    const btn = document.getElementById('sendBtn');
+    const messageInput = document.getElementById('messageInput');
+    const message = messageInput.value.trim();
+    if (!message) return;
+    if (!currentProfile) {
+        alert('Please select a profile first');
+        return;
+    }
+    if (message.length > 220) {
+        alert('Message is too long. Maximum 220 characters allowed.');
+        return;
+    }
+
+    const payload = {
+        message,
+        message_type: activeChatTab === 'dm' ? 'dm' : 'channel',
+    };
+    if (payload.message_type === 'dm') {
+        if (!activeDmTargetNodeNum) {
+            alert('Select a DM thread before sending a DM.');
+            return;
+        }
+        payload.target_node_num = activeDmTargetNodeNum;
+    } else if (activeChannelIndex === null || activeChannelIndex === undefined) {
+        alert('Select a channel before sending a message.');
+        return;
+    } else {
+        payload.channel_index = activeChannelIndex;
+    }
+    if (replyingToPacketId) {
+        payload.reply_packet_id = replyingToPacketId;
+    }
+
+    isSendingMessage = true;
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    messageInput.disabled = true;
+    try {
+        const response = await fetch('/api/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({ error: 'Invalid JSON response' }));
+        if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+        messageInput.value = '';
+        updateCharacterCounter();
+        clearReplyComposer();
+        await loadMessages();
+        if (payload.message_type === 'dm') {
+            await loadDmTargets();
+        }
+        renderActiveMessages();
+        updateComposerState();
+    } catch (err) {
+        console.error('Error sending message:', err);
+        alert('Error sending message: ' + err.message);
+    } finally {
+        isSendingMessage = false;
+        updateComposerState();
+        messageInput.focus();
+    }
+}
+
+function getPeerNodeNum(message) {
+    if (!currentProfile || !message || (message.message_type || 'channel') !== 'dm') return null;
+    const myNodeNum = parseNodeId(currentProfile.node_id);
+    if (message.sender_num && Number(message.sender_num) !== myNodeNum) {
+        return Number(message.sender_num);
+    }
+    if (message.target_node_num) {
+        return Number(message.target_node_num);
+    }
+    if (message.sender && message.sender !== currentProfile.node_id) {
+        return parseNodeId(message.sender);
+    }
+    return null;
+}
+
+async function resendMessage(messageId, button) {
+    const message = dmMessages.find(item => String(item.id) === String(messageId));
+    const meta = getAckStatusMeta(message);
+    if (!message || !currentProfile || !['nak', 'max_retransmit'].includes(meta?.status)) return;
+    if (message.owner_profile_id !== currentProfile.id || message.sender !== currentProfile.node_id) return;
+    if (!message.target_node_num || resendingMessageIds.has(messageId)) return;
+
+    const payload = {
+        message: message.content,
+        message_type: 'dm',
+        target_node_num: message.target_node_num,
+    };
+    if (message.reply_packet_id) payload.reply_packet_id = message.reply_packet_id;
+    resendingMessageIds.add(messageId);
+    button.disabled = true;
+    try {
+        const response = await fetch('/api/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({ error: 'Invalid JSON response' }));
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        await loadMessages();
+        await loadDmTargets();
+        renderActiveMessages();
+    } catch (error) {
+        alert('Error resending message: ' + error.message);
+    } finally {
+        resendingMessageIds.delete(messageId);
+        button.disabled = false;
+        document.querySelectorAll('[data-resend-message-id]').forEach(item => {
+            if (item.dataset.resendMessageId === messageId) item.disabled = false;
+        });
+    }
+}
+
+function getMessageByPacketId(packetId) {
+    if (!packetId) return null;
+    const source = activeChatTab === 'dm' ? dmMessages : channelMessages;
+    return source.find(message => Number(message.packet_id) === Number(packetId)) || null;
+}
+
+function formatAckReason(reason) {
+    if (!reason) return '';
+    return String(reason)
+        .toLowerCase()
+        .split('_')
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function getAckStatusMeta(message) {
+    if (!message || message.direction !== 'sent' || !message.ack_requested) {
+        return null;
+    }
+
+    switch (message.ack_status || 'pending') {
+        case 'ack':
+            return { status: 'ack', label: 'ACK received' };
+        case 'implicit_ack':
+            return { status: 'implicit_ack', label: 'Implicit ACK received' };
+        case 'nak':
+            return { status: 'nak', label: 'NAK received' };
+        case 'max_retransmit':
+            return { status: 'max_retransmit', label: 'Delivery failed after retries' };
+        case 'pending':
+        default:
+            return { status: 'pending', label: 'Waiting for ACK' };
+    }
+}
+
+function renderAckIconSvg(status) {
+    if (status === 'ack' || status === 'implicit_ack') {
+        return `
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3.25 8.25 6.25 11.25 12.75 4.75"></path>
+            </svg>
+        `;
+    }
+    if (status === 'nak') {
+        return `
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 4 12 12"></path>
+                <path d="M12 4 4 12"></path>
+            </svg>
+        `;
+    }
+    if (status === 'max_retransmit') {
+        return `
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M8 2.25 13.5 12H2.5L8 2.25Z"></path>
+                <path d="M8 6.25v2.75"></path>
+                <path d="M8 11.25h.01"></path>
+            </svg>
+        `;
+    }
+    return `
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="8" cy="8" r="5.25"></circle>
+            <path d="M8 5.25v3.1"></path>
+            <path d="M8 8.35 10.15 9.7"></path>
+        </svg>
+    `;
+}
+
+function renderAckStatusHtml(message) {
+    const meta = getAckStatusMeta(message);
+    if (!meta) return '';
+
+    const reasonText = formatAckReason(message.ack_error);
+    const title = reasonText ? `${meta.label}: ${reasonText}` : meta.label;
+    const canResend = ['nak', 'max_retransmit'].includes(meta.status)
+        && message.message_type === 'dm' && message.id
+        && message.owner_profile_id === currentProfile?.id && message.sender === currentProfile?.node_id;
+    const resendButton = canResend ? `
+        <button class="message-resend" type="button" data-resend-message-id="${escapeHtml(String(message.id))}"
+            title="Resend message" aria-label="Resend message" ${resendingMessageIds.has(String(message.id)) ? 'disabled' : ''}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 6a5.25 5.25 0 1 1-.25 3.5"></path>
+                <path d="M3 2.5V6h3.5"></path>
+            </svg>
+        </button>
+    ` : '';
+    return `
+        <span class="message-ack message-ack--${escapeHtml(meta.status)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
+            ${renderAckIconSvg(meta.status)}
+        </span>
+        ${resendButton}
+    `;
+}
+
+function renderReplyPreview(message) {
+    if (!message.reply_packet_id) return '';
+    const replyMessage = getMessageByPacketId(message.reply_packet_id);
+    if (!replyMessage) {
+        return `
+            <div class="reply-preview small text-muted">
+                Replying to message #${escapeHtml(String(message.reply_packet_id))}
+            </div>
+        `;
+    }
+    return `
+        <div class="reply-preview small text-muted">
+            <div class="fw-semibold">${escapeHtml(replyMessage.sender_display || replyMessage.sender || 'message')}</div>
+            <div>${escapeHtml(truncateText(replyMessage.content || '', 100))}</div>
+        </div>
+    `;
+}
+
+function startReply(packetId) {
+    replyingToPacketId = Number(packetId);
+    updateComposerState();
+    document.getElementById('messageInput').focus();
+}
+
+function clearReplyComposer() {
+    replyingToPacketId = null;
+    updateComposerState();
+}
+
+function updateHeaderState() {
+    const mobileSubline = document.getElementById('mobileProfileSubline');
+    const desktopSubline = document.getElementById('desktopProfileSubline');
+    if (mobileSubline) mobileSubline.textContent = '';
+    if (desktopSubline) desktopSubline.textContent = '';
+}
+
+function updateStatusLight(elementId, status) {
+    const light = document.getElementById(elementId);
+    if (!light) return;
+    light.classList.remove('is-online', 'is-warning', 'is-offline', 'is-idle');
+
+    if (status === 'bg-success') {
+        light.classList.add('is-online');
+    } else if (status === 'bg-warning') {
+        light.classList.add('is-warning');
+    } else if (status === 'bg-danger') {
+        light.classList.add('is-offline');
+    } else {
+        light.classList.add('is-idle');
+    }
+}
+
+function updateConnectButton(buttonId, noProfileText) {
+    const btn = document.getElementById(buttonId);
+    if (!btn) return;
+
+    btn.classList.remove('is-connected');
+
+    if (!currentProfile) {
+        btn.textContent = noProfileText;
+        return;
+    }
+
+    if (currentInterfaceStatusClass === 'bg-success') {
+        btn.textContent = 'Reconnect';
+        btn.classList.add('is-connected');
+        return;
+    }
+
+    if (currentInterfaceStatusClass === 'bg-danger') {
+        btn.textContent = 'Reconnect';
+        return;
+    }
+
+    btn.textContent = 'Reconnect';
+}
+
+function updateConnectButtons() {
+    updateConnectButton('mobileConnectBtn', 'Select');
+    updateConnectButton('desktopConnectBtn', 'Select');
+}
+
+function handleMobileConnectClick() {
+    if (!currentProfile && !(document.getElementById('profileSelect')?.value)) {
+        const sheet = document.getElementById('mobileSettingsSheet');
+        if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+            bootstrap.Offcanvas.getOrCreateInstance(sheet).show();
+        }
+        return;
+    }
+    reconnectProfile(document.getElementById('mobileConnectBtn'));
+}
+
+function handleDesktopConnectClick() {
+    if (!currentProfile) {
+        openProfileSelector();
+        return;
+    }
+    reconnectProfile(document.getElementById('desktopConnectBtn'));
+}
+
+function getPeerLabel(message, peerNodeNum) {
+    const node = getNodeByNum(peerNodeNum);
+    if (node && (node.long_name || node.short_name)) return getNodeDisplayLabel(node);
+    const knownTarget = dmTargets.find(target => Number(target.node_num) === Number(peerNodeNum));
+    if (knownTarget) return knownTarget.label;
+    const localProfile = getManagedProfileByNodeNum(peerNodeNum);
+    if (localProfile) {
+        return localProfile.long_name || localProfile.short_name || localProfile.node_id || `!${Number(peerNodeNum).toString(16).padStart(8, '0')}`;
+    }
+    if (message.sender_num && Number(message.sender_num) === Number(peerNodeNum)) {
+        return message.sender_display || message.sender || `!${Number(peerNodeNum).toString(16).padStart(8, '0')}`;
+    }
+    return message.target || `!${Number(peerNodeNum).toString(16).padStart(8, '0')}`;
+}
+
+function parseNodeId(nodeId) {
+    if (!nodeId || typeof nodeId !== 'string' || !nodeId.startsWith('!')) return null;
+    return parseInt(nodeId.slice(1), 16);
+}
+
+function parseTimestampValue(rawTimestamp) {
+    if (!rawTimestamp) return null;
+    try {
+        if (typeof rawTimestamp === 'number') {
+            const ts = rawTimestamp > 1e10 ? new Date(rawTimestamp) : new Date(rawTimestamp * 1000);
+            return isNaN(ts.getTime()) ? null : ts;
+        }
+
+        if (typeof rawTimestamp === 'string') {
+            const tsString = rawTimestamp.trim();
+            let ts;
+            if (tsString.includes('T') && (tsString.includes('Z') || tsString.includes('+') || tsString.includes('-'))) {
+                ts = new Date(tsString);
+            } else if (tsString.includes('T')) {
+                ts = new Date(tsString + 'Z');
+            } else if (tsString.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/)) {
+                ts = new Date(tsString.replace(' ', 'T') + 'Z');
+            } else {
+                ts = new Date(tsString);
+                if (isNaN(ts.getTime())) {
+                    ts = new Date(tsString + 'Z');
+                }
+            }
+            return isNaN(ts.getTime()) ? null : ts;
+        }
+
+        const ts = new Date(rawTimestamp);
+        return isNaN(ts.getTime()) ? null : ts;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function formatRelativeTime(rawTimestamp) {
+    const timestamp = parseTimestampValue(rawTimestamp);
+    if (!timestamp) return '';
+
+    const diffMs = timestamp.getTime() - Date.now();
+    const absDiffMs = Math.abs(diffMs);
+    if (absDiffMs < 30 * 1000) {
+        return 'just now';
+    }
+
+    const units = [
+        ['year', 365 * 24 * 60 * 60 * 1000],
+        ['month', 30 * 24 * 60 * 60 * 1000],
+        ['week', 7 * 24 * 60 * 60 * 1000],
+        ['day', 24 * 60 * 60 * 1000],
+        ['hour', 60 * 60 * 1000],
+        ['minute', 60 * 1000],
+    ];
+
+    const formatter = new Intl.RelativeTimeFormat(undefined, {numeric: 'always'});
+    for (const [unit, unitMs] of units) {
+        if (absDiffMs >= unitMs || unit === 'minute') {
+            return formatter.format(Math.round(diffMs / unitMs), unit);
+        }
+    }
+
+    return 'just now';
+}
+
+function formatNodeLastSeen(lastSeen) {
+    if (!lastSeen) return 'Unknown';
+    const relative = formatRelativeTime(lastSeen);
+    if (!relative) return escapeHtml(String(lastSeen));
+
+    const exact = formatDateTime(lastSeen);
+    return `<span title="${escapeHtml(exact)}">${escapeHtml(relative)}</span>`;
+}
+
+function formatNodeHopsBadge(value) {
+    if (value === null || value === undefined) return '<span class="text-muted">Unknown</span>';
+    return `<span class="badge bg-success">${escapeHtml(String(value))}</span>`;
+}
+
+function formatTimestamp(rawTimestamp) {
+    const ts = parseTimestampValue(rawTimestamp);
+    if (!ts) return '';
+
+    const now = new Date();
+    const isToday = ts.getFullYear() === now.getFullYear()
+        && ts.getMonth() === now.getMonth()
+        && ts.getDate() === now.getDate();
+    const time = ts.toLocaleTimeString([], {hour12: true, hour: 'numeric', minute: '2-digit'});
+
+    return isToday
+        ? time
+        : `${ts.toLocaleDateString([], {month: 'short', day: 'numeric'})}, ${time}`;
+}
+
+function truncateText(value, maxLength) {
+    if (!value) return '';
+    return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
+function updateChatUrl() {
+    const params = new URLSearchParams(window.location.search);
+    if (activeChatTab === 'dm') {
+        params.set('tab', 'dms');
+        if (activeDmTargetNodeNum) {
+            params.set('dm', String(activeDmTargetNodeNum));
+        } else {
+            params.delete('dm');
+        }
+        params.delete('channel');
+    } else if (activeChatTab === 'nodes') {
+        params.set('tab', 'nodes');
+        params.delete('dm');
+        params.delete('channel');
+    } else if (activeChatTab === 'map') {
+        params.set('tab', 'map');
+        params.delete('dm');
+        params.delete('channel');
+    } else if (activeChatTab === 'profiles') {
+        params.set('tab', 'profiles');
+        params.delete('dm');
+        params.delete('channel');
+    } else {
+        params.delete('dm');
+        params.delete('tab');
+        if (activeChannelIndex !== null && activeChannelIndex !== undefined) {
+            params.set('channel', String(activeChannelIndex));
+        } else {
+            params.delete('channel');
+        }
+    }
+    const query = params.toString();
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+    window.history.replaceState({}, '', nextUrl);
+}
+
+function getNodeByNum(nodeNum) {
+    return meshNodes.find(node => Number(node.node_num) === Number(nodeNum)) || null;
+}
+
+function getNodeDisplayLabel(nodeOrNum) {
+    const node = nodeOrNum && typeof nodeOrNum === 'object' ? nodeOrNum : getNodeByNum(nodeOrNum);
+    const nodeNum = node?.node_num ?? nodeOrNum;
+    return node?.long_name || node?.short_name || node?.node_id || `!${Number(nodeNum).toString(16).padStart(8, '0')}`;
+}
+
+async function exchangeNodeInfo(nodeNum) {
+    try {
+        const response = await fetch(`/api/nodes/${nodeNum}/exchange-nodeinfo`, { method: 'POST', headers: { 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content } });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || `HTTP ${response.status}`);
+        }
+        showNotification(`Node info exchange requested with ${getNodeDisplayLabel(nodeNum)}. Sent via ${payload.channel_name || 'your mesh channel'}. Wait for its NodeInfo reply before sending a DM.`, 'success');
+    } catch (error) {
+        console.error('Error exchanging node info:', error);
+        alert(`Error exchanging node info: ${error.message}`);
+    }
+}
+
+function renderTracerouteHop(hop) {
+    const snr = hop.snr === null || hop.snr === undefined ? '' : `<span class="traceroute-hop__snr">${escapeHtml(String(hop.snr))} dB</span>`;
+    return `<span class="traceroute-hop">${escapeHtml(hop.label || hop.node_id || 'Unknown')}${snr}</span>`;
+}
+
+function renderTraceroutePath(hops) {
+    if (!Array.isArray(hops) || !hops.length) {
+        return '<div class="text-muted small">No hops reported.</div>';
+    }
+    return `<div class="traceroute-path">${hops.map((hop, index) => `${index > 0 ? '<span class="traceroute-arrow">→</span>' : ''}${renderTracerouteHop(hop)}`).join('')}</div>`;
+}
+
+function updateTracerouteModalTitle(title) {
+    document.getElementById('tracerouteModalLabel').textContent = title;
+}
+
+function updateTracerouteModalBody(html) {
+    document.getElementById('tracerouteContent').innerHTML = html;
+}
+
+async function openTracerouteModal(nodeNum) {
+    const nodeLabel = getNodeDisplayLabel(nodeNum);
+    updateTracerouteModalTitle(`Traceroute - ${nodeLabel}`);
+    updateTracerouteModalBody('<div class="text-muted">Running traceroute…</div>');
+    activeTracerouteRequest = { nodeNum: Number(nodeNum), startedAt: Date.now() };
+    new bootstrap.Modal(document.getElementById('tracerouteModal')).show();
+
+    try {
+        const response = await fetch(`/api/nodes/${nodeNum}/traceroute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
+            body: JSON.stringify({}),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || `HTTP ${response.status}`);
+        }
+        activeTracerouteRequest.packetId = payload.packet_id;
+        updateTracerouteModalBody(`<div class="text-muted">Traceroute sent via ${escapeHtml(payload.channel_name || 'your mesh channel')}. Waiting for response…</div>`);
+    } catch (error) {
+        console.error('Error sending traceroute:', error);
+        updateTracerouteModalBody(`<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`);
+    }
+}
+
+function handleTracerouteResult(result) {
+    if (!result || !currentProfile || result.owner_profile_id !== currentProfile.id) {
+        return;
+    }
+
+    const activeRequest = activeTracerouteRequest;
+    if (activeRequest && Number(activeRequest.nodeNum) !== Number(result.from_node_num)) {
+        return;
+    }
+
+    const towards = renderTraceroutePath(result.route_towards || []);
+    const back = renderTraceroutePath(result.route_back || []);
+    updateTracerouteModalTitle(`Traceroute - ${getNodeDisplayLabel(result.from_node_num)}`);
+    updateTracerouteModalBody(`
+        <div class="traceroute-section">
+            <div class="fw-semibold mb-2">Towards destination</div>
+            ${towards}
+        </div>
+        <div class="traceroute-section">
+            <div class="fw-semibold mb-2">Back to us</div>
+            ${back}
+        </div>
+    `);
+    activeTracerouteRequest = null;
+}
+
+function formatDateTime(dateTimeStr) {
+    if (!dateTimeStr) return 'Unknown';
+    try {
+        const date = new Date(dateTimeStr);
+        return date.toLocaleString();
+    } catch (_error) {
+        return dateTimeStr;
+    }
+}
+
+function showNodeNotification(message, type = 'info') {
+    // Create a temporary notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close notification"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+function showNotification(message, type = 'info', duration = 4000) {
+    console.log('[NOTIFICATION] showNotification called:', { message, type, duration });
+    // Create a temporary notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close notification"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    console.log('[NOTIFICATION] Toast notification displayed');
+    
+    // Auto-remove after specified duration
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, duration);
+}
+
+function escapeHtml(unsafe) {
+    return String(unsafe ?? '')
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function renderMessageContentHtml(content) {
+    const normalized = String(content ?? '').replace(/\r\n?/g, '\n');
+    const fenceTokens = [];
+    let working = normalized.replace(/```([^\n`]*)\n([\s\S]*?)```/g, (_, language, code) => {
+        const label = escapeHtml((language || '').trim());
+        const codeHtml = escapeHtml(code.replace(/\n$/, ''));
+        const token = `@@FENCE_${fenceTokens.length}@@`;
+        fenceTokens.push(
+            `<pre><code${label ? ` data-language="${label}"` : ''}>${codeHtml}</code></pre>`
+        );
+        return token;
+    });
+
+    const blocks = working.split(/\n{2,}/).map(block => renderMarkdownBlock(block.trim())).filter(Boolean);
+    if (!blocks.length) {
+        return '';
+    }
+    return restoreMarkdownTokens(blocks.join(''), fenceTokens, 'FENCE');
+}
+
+function renderMarkdownBlock(block) {
+    if (!block) return '';
+    if (/^@@FENCE_\d+@@$/.test(block)) {
+        return block;
+    }
+
+    const lines = block.split('\n');
+    if (lines.every(line => /^\s*[-*]\s+/.test(line))) {
+        const items = lines.map(line => `<li>${renderMarkdownInline(line.replace(/^\s*[-*]\s+/, ''))}</li>`).join('');
+        return `<ul>${items}</ul>`;
+    }
+    if (lines.every(line => /^\s*\d+\.\s+/.test(line))) {
+        const items = lines.map(line => `<li>${renderMarkdownInline(line.replace(/^\s*\d+\.\s+/, ''))}</li>`).join('');
+        return `<ol>${items}</ol>`;
+    }
+    if (lines.every(line => /^\s*>\s?/.test(line))) {
+        const body = lines.map(line => renderMarkdownInline(line.replace(/^\s*>\s?/, ''))).join('<br>');
+        return `<blockquote>${body}</blockquote>`;
+    }
+
+    return `<p>${lines.map(line => renderMarkdownInline(line)).join('<br>')}</p>`;
+}
+
+function renderMarkdownInline(text) {
+    const tokenStore = [];
+    const addToken = html => {
+        const token = `@@INLINE_${tokenStore.length}@@`;
+        tokenStore.push(html);
+        return token;
+    };
+    const createExternalLinkToken = (labelHtml, url) => {
+        const safeUrl = escapeHtml(url);
+        return addToken(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${labelHtml}</a>`);
+    };
+
+    let html = escapeHtml(text);
+    html = html.replace(/`([^`\n]+)`/g, (_, code) => addToken(`<code>${code}</code>`));
+    html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) => createExternalLinkToken(label, url));
+    html = html.replace(/(^|[\s(>])((https?:\/\/)[^\s<]+)/g, (_, prefix, rawUrl) => {
+        const match = rawUrl.match(/^(.*?)([.,!?;:)]*)$/);
+        const url = match ? match[1] : rawUrl;
+        const trailing = match ? match[2] : '';
+        return `${prefix}${createExternalLinkToken(url, url)}${trailing}`;
+    });
+    html = html.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '<strong>$2</strong>');
+    html = html.replace(/(\*|_)(?=\S)([\s\S]*?\S)\1/g, '<em>$2</em>');
+    html = html.replace(/~~(?=\S)([\s\S]*?\S)~~/g, '<del>$1</del>');
+    return restoreMarkdownTokens(html, tokenStore, 'INLINE');
+}
+
+function restoreMarkdownTokens(html, tokenStore, prefix) {
+    return tokenStore.reduce(
+        (output, tokenHtml, index) => output.replaceAll(`@@${prefix}_${index}@@`, tokenHtml),
+        html
+    );
+}
+</script>
+<script src="{{ url_for('static', filename='js/threads.js') }}"></script>
+<script src="{{ url_for('static', filename='js/node-panels.js') }}"></script>
+<script src="{{ url_for('static', filename='js/board-unread.js') }}"></script>
+<script src="{{ url_for('static', filename='js/board.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/board.css') }}">
+{% endblock %}

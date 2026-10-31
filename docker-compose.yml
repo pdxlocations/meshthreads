@@ -1,0 +1,49 @@
+services:
+  meshthreads:
+    # Build this MeshThreads checkout.
+    build: .
+    
+    container_name: meshthreads-app
+    
+    # NETWORKING OPTIONS:
+    # Default: host networking for direct UDP multicast access on the host network stack.
+    network_mode: host
+    # If you need bridge mode instead, comment out `network_mode: host`, then uncomment:
+    # ports:
+    #   - "${FIREFLY_WEB_PORT:-5069}:${FIREFLY_PORT:-5069}"
+    #   - "${FIREFLY_UDP_PORT:-4403}:${FIREFLY_UDP_PORT:-4403}/udp"
+    # networks:
+    #   - meshthreads-network
+    environment:
+      - FIREFLY_HOST=${FIREFLY_HOST:-0.0.0.0}
+      - FIREFLY_PORT=${FIREFLY_PORT:-5069}
+      - FIREFLY_WEB_PORT=${FIREFLY_WEB_PORT:-5069}
+      - FIREFLY_DATABASE_FILE=${FIREFLY_DATABASE_FILE:-/app/data/mudpchat.db}
+      - FIREFLY_SECRET_KEY=${FIREFLY_SECRET_KEY:-}
+      - FIREFLY_DEBUG=${FIREFLY_DEBUG:-false}
+      - FIREFLY_UDP_PORT=${FIREFLY_UDP_PORT:-4403}
+      - FIREFLY_MCAST_GRP=${FIREFLY_MCAST_GRP:-239.0.0.69}
+      # Keep this in sync with the networking option above so startup logs show the right URL.
+      - NETWORK_MODE=host
+      # - NETWORK_MODE=bridge
+    volumes:
+      - meshthreads_data:/app/data
+      # Optional: mount your own config or profiles (uncomment if you have them)
+      # - ./profiles:/app/profiles:ro
+      # - ./config.yaml:/app/config.yaml:ro
+    restart: unless-stopped
+    # Healthcheck to ensure service is running
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5069/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  meshthreads-network:
+    driver: bridge
+
+volumes:
+  meshthreads_data:
+    driver: local

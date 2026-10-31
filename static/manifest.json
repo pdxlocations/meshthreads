@@ -1,0 +1,42 @@
+{
+  "id": "/",
+  "name": "MeshThreads",
+  "short_name": "MeshThreads",
+  "description": "MeshThreads threaded Meshtastic message boards.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "background_color": "#e8eff0",
+  "theme_color": "#e8eff0",
+  "lang": "en-US",
+  "categories": [
+    "communication",
+    "utilities"
+  ],
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/images/meshthreads.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/meshthreads-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/meshthreads-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

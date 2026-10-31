@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In - MeshThreads{% endblock %}
+
+{% block content %}
+<style>
+.auth-panel {
+    max-width: 32rem;
+    margin: 0 auto;
+}
+
+.auth-panel__secondary {
+    margin-top: 1rem;
+}
+
+.auth-panel__or {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1rem;
+    color: var(--muted);
+}
+
+.auth-panel__or::before, .auth-panel__or::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid var(--bs-border-color);
+}
+</style>
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+        <div class="auth-panel card shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Sign In</h5>
+            </div>
+            <div class="card-body p-4 p-lg-5">
+                <form method="post" action="{{ url_for('login') }}" data-async-form>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="loginUsername">Username</label>
+                        <input class="form-control" id="loginUsername" name="username" type="text" maxlength="64" required autocomplete="username">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="loginPassword">Password</label>
+                        <input class="form-control" id="loginPassword" name="password" type="password" minlength="1" required autocomplete="current-password">
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">Sign In</button>
+
+                    <div class="auth-panel__secondary text-center">
+                        <span class="auth-panel__or">or</span>
+                        <button class="btn btn-outline-primary" type="submit" formaction="{{ url_for('register') }}">
+                            Create Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

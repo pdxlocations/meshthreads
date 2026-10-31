@@ -1,0 +1,10 @@
+Flask
+Flask-SocketIO
+python-socketio
+python-engineio
+meshtastic
+cryptography>=43,<44
+mudp>=1.6.0,<2
+Pypubsub
+vnode>=0.2.3,<0.3
+meshdb>=0.3.0,<0.4
