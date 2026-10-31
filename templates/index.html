@@ -3947,14 +3947,7 @@ function renderMap(nodes) {
             title: node.long_name || node.node_id || shortName,
         });
 
-        const popupLines = [
-            `<div class="fw-semibold">${escapeHtml(node.long_name || shortName)}</div>`,
-            `<div class="small text-muted">${escapeHtml(node.node_id || `!${Number(node.node_num).toString(16).padStart(8, '0')}`)}</div>`,
-        ];
-        if (node.position_timestamp) {
-            popupLines.push(`<div class="small mt-1">Updated ${escapeHtml(formatPositionTime(node.position_timestamp))}</div>`);
-        }
-        marker.bindPopup(popupLines.join(''));
+        marker.bindPopup(() => createNodeMapPopup(node));
         marker.addTo(mapLayerGroup);
         bounds.push([lat, lng]);
     });
@@ -3966,6 +3959,21 @@ function renderMap(nodes) {
     }
 
     window.requestAnimationFrame(() => mapInstance?.invalidateSize());
+}
+
+function createNodeMapPopup(node) {
+    const number = Number(node.node_num);
+    const name = getNodeDisplayLabel(node);
+    const nodeId = node.node_id || `!${number.toString(16).padStart(8, '0')}`;
+    const content = document.createElement('div');
+    content.innerHTML = `<div class="fw-semibold">${escapeHtml(name)}</div><button type="button" class="map-node-directory-link" aria-label="Open ${escapeHtml(name)} in node directory">${escapeHtml(nodeId)}</button>${node.position_timestamp ? `<div class="small mt-1">Updated ${escapeHtml(formatPositionTime(node.position_timestamp))}</div>` : ''}`;
+    // Leaflet stops popup events before they reach document-level listeners.
+    content.querySelector('button').addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        void jumpToDirectoryNode(number);
+    });
+    return content;
 }
 
 function buildMapBaseLayers() {

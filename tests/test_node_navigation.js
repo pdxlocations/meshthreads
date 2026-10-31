@@ -41,3 +41,17 @@ test('clicking node header text or whitespace toggles details while action butto
     assert.equal(toggles, 1);
     assert.deepEqual(actions, [7]);
 });
+
+test('map popup node ID navigates directly despite Leaflet stopping document click events', () => {
+    const template = fs.readFileSync(require('node:path').join(__dirname, '../templates/index.html'), 'utf8');
+    let click, destination, prevented = false, stopped = false;
+    const content = {innerHTML:'', querySelector:()=>({addEventListener:(event,handler)=>{click=handler;}})};
+    const c = {document:{createElement:()=>content}, getNodeDisplayLabel:n=>n.long_name,
+        escapeHtml:v=>String(v).replace(/</g,'&lt;').replace(/"/g,'&quot;'), formatPositionTime:v=>v,
+        jumpToDirectoryNode:number=>{destination=number;}};
+    vm.createContext(c);vm.runInContext(template.match(/function createNodeMapPopup\([^]*?\n\}/)[0],c);
+    c.createNodeMapPopup({node_num:7,node_id:'!00000007',long_name:'Cedar',position_timestamp:'today'});
+    click({preventDefault:()=>{prevented=true;},stopPropagation:()=>{stopped=true;}});
+    assert.equal(destination,7);assert.equal(prevented,true);assert.equal(stopped,true);
+    assert.match(content.innerHTML,/!00000007/);assert.match(content.innerHTML,/Open Cedar in node directory/);
+});

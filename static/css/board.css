@@ -756,3 +756,9 @@ body[data-bs-theme] .station-account > .dropdown-menu {
   .station-profile-link { font-size: 14px; min-height: 34px; }
   .profile-item__actions [data-set-profile-id], .profile-item__actions [data-edit-profile-id] { min-height: 36px; }
 }
+
+button.map-node-directory-link { display: inline-flex; align-items: center; min-height: 30px; padding: 2px 0 !important; border: 0 !important; color: var(--amber) !important; background: transparent !important; text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
+@media (pointer: coarse) { button.map-node-directory-link { min-height: 44px; } }
+#nodeMap .leaflet-popup-content-wrapper, #nodeMap .leaflet-popup-tip { background: var(--panel); color: var(--terminal); }
+#nodeMap .leaflet-popup-content { font-family: inherit; font-size: 13px; }
+#nodeMap .leaflet-popup-close-button { color: var(--muted); }
