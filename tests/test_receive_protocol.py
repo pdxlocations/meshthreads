@@ -30,6 +30,7 @@ class ReceiveProtocolTests(unittest.TestCase):
         self.database.get_profile_by_node_num.side_effect = lambda n: self.profile if n == 42 else None
         self.patch('_storage_mesh_stores_for_packet', return_value=[])
         self.patch('_find_sender_node_for_packet', return_value=None)
+        self.discovery = self.patch('_schedule_unknown_sender_nodeinfo')
         self.patch('_sender_public_key_for_local_packet', return_value=None)
         self.patch('_my_node_num', return_value=42)
         self.patch('_log_packet_summary')
@@ -82,6 +83,8 @@ class ReceiveProtocolTests(unittest.TestCase):
         self.assertEqual(kwargs['reply_packet_id'], 99)
         self.assertEqual(kwargs['channel'], 15)
         self.assertEqual(kwargs['content'], 'reply from radio')
+        self.discovery.assert_called_once()
+        self.assertEqual(getattr(self.discovery.call_args.args[0], 'from'), 7)
 
     def test_encrypted_nodeinfo_response_is_decoded_without_a_cached_public_key(self):
         handler = self.patch('on_nodeinfo')

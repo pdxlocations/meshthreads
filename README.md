@@ -1,10 +1,38 @@
 # MeshThreads
 
-A compact threaded message board for Meshtastic with Harbor light and dark themes. Built from
-[Firefly](https://github.com/pdxlocations/firefly), preserving its Flask,
-Socket.IO, SQLite, vnode, meshdb, and UDP multicast backend.
+A threaded message board for Meshtastic. Rooms have their own conversations, replies nest under the message they answer, and new replies bring the whole thread back to the top.
 
-## Run
+Built from [Firefly](https://github.com/pdxlocations/firefly), using its Flask, Socket.IO, SQLite, vnode, meshdb, and UDP multicast backend. The Harbor interface has light and dark modes, compact desktop panels, and a full-width mobile board.
+
+## Screenshots
+
+Actual app captures using fictional sample messages, nodes, and telemetry. The sample mesh transport is stopped; these images do not represent live radio delivery.
+
+**Threaded board, dark mode** — nested replies, room unread counts, and starred nodes.
+
+![MeshThreads dark board with nested replies and room navigation](docs/screenshots/board-dark.png)
+
+<details>
+<summary>Light mode</summary>
+
+![MeshThreads board in the Harbor light theme](docs/screenshots/board-light.png)
+
+</details>
+
+**Node directory** — grouped roster with expanded connection details, saved traceroute, telemetry, and position map.
+
+![Node directory with a saved traceroute, telemetry readings, and a map](docs/screenshots/node-directory.png)
+
+Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+
+**Mobile** — compact conversations and an on-demand navigation drawer.
+
+<p>
+  <img src="docs/screenshots/board-mobile.png" alt="Mobile board with nested replies and a compact composer" width="300">
+  <img src="docs/screenshots/mobile-navigation.png" alt="Mobile navigation drawer with active profile, connection status, and rooms" width="300">
+</p>
+
+## Quick start
 
 Python 3.11–3.14 is supported. From this folder:
 
@@ -14,78 +42,106 @@ python3 -m venv .venv
 .venv/bin/python start.py
 ```
 
-Open **http://localhost:5069**. Create an account, open **Configure profiles**,
-create a profile with your existing mesh channel name and PSK, then activate it.
-The app discovers nodes through Meshtastic UDP multicast; it does not connect
-to a radio over Bluetooth or serial. Match the multicast group/port and mesh
-channel settings used by your network, as in Firefly.
+Open **http://localhost:5069** and create an account. The same username and password fields serve **Sign In** and **Create Account**.
 
-The local `.venv` is installed during initial setup when dependencies are available.
-The application starts with a fresh database. No Firefly accounts, messages,
-profile identities, private keys, or `.env` files were copied.
+1. Open **Profiles** from the account menu or navigation.
+2. Create a profile with your long name, short name, and existing mesh channel name and PSK.
+3. Click **Activate**. MeshThreads opens the first channel’s messages.
 
-## Board and rooms
+Profiles are virtual nodes on the mesh. Each has its own identity and channels. When an account has exactly one profile, signing in automatically activates it and opens its first channel. Accounts with zero or multiple profiles open Profiles instead. The active profile’s card provides **Deactivate**.
 
-- Rooms on the left, threaded board in the center, nodes on the right.
-- Every top-level message starts a thread. Replies use standard Meshtastic
-  `reply_id` packet metadata, expand inline, and bump the original thread to the
-  top. Replies to replies remain under the same original post.
-- Channel history includes older posts so a recent reply can restore an old
-  thread. If an original was never received or its history was cleared, the
-  board labels the missing original and groups the available replies.
-- **New room** creates a channel on the active profile with a cryptographically
-  random 32-byte PSK. Room names allow up to 12 UTF-8 bytes.
-- **Room settings** lets you rename a channel, rotate its PSK, copy its standard
-  Meshtastic URL, or leave it. Keep at least one channel on each profile.
-  Changing the name or key changes the mesh channel; share the new URL with
-  participants. Leaving preserves stored history.
-- **Invite to room** in either node list opens a room picker. Any participant
-  can invite a node to any room on their active profile. The invitation is a
-  DM containing a standard Meshtastic channel URL with the PSK.
-- Received DM invitations show **Join room**. Acceptance explicitly adds the
-  room to the recipient’s active profile; repeated acceptance reopens it.
-  Links containing multiple channels are rejected to avoid importing unrelated
-  channels or changing radio settings.
-- Star nodes in either node list to keep them at the top. Favorites persist
-  with your account across sessions and profiles. DM conversation headers show
-  the active person’s name and node ID.
-- DMs, delivery status/retry, node details, node-info exchange, traceroute, map,
-  multiple profiles, notifications, accounts, passwords, and account deletion
-  retain Firefly’s workflows. A successful invitation submission means queued
-  for transmission; check its ACK/delivery status in DMs.
+MeshThreads uses **Meshtastic UDP multicast**. It does not connect directly to a radio over Bluetooth or serial. Your network must deliver the multicast traffic to this machine, and the channel name and PSK must match the mesh you want to use.
 
-On narrower screens the node rail is hidden; **Nodes** still provides the node
-list and invitation controls. On phones, Rooms & navigation opens a compact drawer so the board uses the full screen width. The sidebar shows the active profile and Web/Mesh status; tap the profile name to open Profiles. Activation and deactivation live on profile cards, with the accent-colored action. Activating a profile opens its first channel. Login automatically activates the profile and opens messages when the account has exactly one profile; other accounts open Profiles. Tapping the header account name closes the mobile drawer.
+## Conversations and rooms
 
-The compact Harbor interface uses locally bundled Nunito Sans, soft blue-gray panels and teal accents, with profile and room panels on the left, inline threads in the center, and nodes on the right. Use the sun/moon icon to the left of your user menu to switch between light and dark modes. Your choice is remembered in this browser. Bootstrap, Socket.IO client, and Leaflet retain Firefly’s CDN
-loading requirements.
+- **Threads:** every new top-level message starts a conversation. Replies use standard Meshtastic `reply_id` metadata, and replies to replies form indented branches. Any new reply bumps the original thread to the top.
+- **Expanded by default:** reply branches stay open until manually collapsed. Reply links are always visible, including on touch screens.
+- **Unread activity:** room counts, thread badges, and **New** labels identify unread messages. A channel is marked read after all its loaded unread messages have been visible in a focused tab. Collapsed or offscreen replies keep the channel unread.
+- **History:** older posts remain available for thread reconstruction. If an original message was never received or its history was cleared, the board labels the missing original and groups the available replies.
+- **Direct messages:** conversation headers identify the other node. Delivery status and retry controls help track outgoing messages.
 
-## Configuration and Docker
+### Create, share, and join rooms
 
-Firefly’s `FIREFLY_*` environment variables remain supported. Defaults use
-web port **5069**, multicast **239.0.0.69:4403**, local `firefly.db`, and
-`firefly_runtime/` inside this checkout. These files are ignored by Git.
+**New room** adds a channel to the active profile with a cryptographically random 32-byte PSK. Room names allow up to 12 UTF-8 bytes.
+
+**Room settings** lets you rename a channel, rotate its PSK, copy its Meshtastic URL, or leave the room. Changing the name or key changes the mesh channel; share the updated link with participants. Keep at least one channel per profile. Leaving a room preserves its stored history.
+
+**Invite to room** sends a DM containing an invitation and the selected room’s standard Meshtastic channel URL. Anyone can invite a node to a room on their active profile. The link includes the room’s PSK.
+
+Recipients choose **Join room** before the channel is added to their active profile. **Join by URL** accepts the same links. Repeated acceptance reopens the room; links containing multiple channels are rejected to avoid importing unrelated settings. Sending an invitation queues it for transmission—check its DM delivery status for acknowledgement.
+
+## Nodes, telemetry, and maps
+
+The node directory uses a compact **Starred / Other nodes** roster with search, All/Starred filters, and sorting by last heard, name, or hops. Stars persist with your account across sessions and profiles.
+
+Click a node header to expand its details. DM, invite, and star buttons keep their own actions. Clicking a node in the right-hand rail jumps to its directory entry and expands it.
+
+Expanded details include:
+
+- Received SNR, rooms where the node was heard, and public-key availability.
+- Latest saved traceroute in both directions, including reported signal values and receipt time. Results persist per profile and destination across restarts.
+- Latest stored telemetry by category: device, environment, power, air quality, radio statistics, and host metrics when reported. Missing readings are omitted, and each category shows its update time.
+- An interactive map of the last reported position, with coordinates, altitude when available, and the position update time.
+- **Exchange node info** and **Traceroute** actions.
+
+Messages from unknown senders automatically trigger a node-info request after five seconds, using the active virtual profile and the received channel. If node info arrives during the delay, the request is skipped. Requests are staggered and limited to once per sender every ten minutes.
+
+Telemetry loads when details are expanded and refreshes with directory updates. Viewing telemetry does not send extra telemetry requests over the radio. Metric definitions follow the [Meshtastic telemetry schema](https://github.com/meshtastic/protobufs/blob/master/meshtastic/telemetry.proto).
+
+**Network map** shows nodes with reported positions. Tap a marker, then its node ID, to open that node’s directory entry.
+
+## Desktop and mobile navigation
+
+Desktop shows rooms on the left, conversations in the center, and nodes on the right. The sidebar displays the active profile and Web/Mesh status; tapping the profile name opens Profiles.
+
+On phones, **Rooms & navigation** opens a compact drawer so conversations use the full screen width. Its button shows the total unread count. Choosing a destination or tapping the account name closes the drawer.
+
+The header account menu contains **Profiles**, **Account settings**, and **Logout**. The sun/moon button switches light and dark mode and remembers your choice in that browser. Nunito Sans is bundled locally; Bootstrap, Socket.IO client, Leaflet, and map tiles require network access.
+
+## Configuration
+
+Firefly’s `FIREFLY_*` environment variables remain supported.
+
+| Variable | Default for native startup |
+| --- | --- |
+| `FIREFLY_HOST` | `0.0.0.0` |
+| `FIREFLY_PORT` | `5069` |
+| `FIREFLY_MCAST_GRP` | `239.0.0.69` |
+| `FIREFLY_UDP_PORT` | `4403` |
+| `FIREFLY_DATABASE_FILE` | `firefly.db` |
+| `FIREFLY_RUNTIME_DIR` | `firefly_runtime/` beside the database |
+| `FIREFLY_SECRET_KEY` | Generated persistently when unset |
+
+For example:
 
 ```sh
-docker compose up --build
+FIREFLY_PORT=5069 .venv/bin/python start.py
 ```
 
-The Compose service/container/volume are named for MeshThreads to keep them
-separate from Firefly. Linux host networking preserves UDP multicast behavior.
-For other networking modes, see [Docker notes](DOCKER.md).
+Keep the database and its matching runtime identity directory together when backing up or restoring. Do not run the same restored identity simultaneously in Firefly and MeshThreads. The [upstream documentation](docs/FIREFLY.md) covers inherited configuration and identity migration.
 
-To migrate an existing Firefly installation intentionally, stop it and back up
-its database **and matching runtime identity directory together**. Configure
-`FIREFLY_DATABASE_FILE` and `FIREFLY_RUNTIME_DIR` to point to the copied pair.
-Never share a live database between the two apps or run the same node identity
-in both at once. Identity migration and original Firefly configuration details
-are documented in [the upstream README](docs/FIREFLY.md).
+### Docker
 
-Expanded node details also show the latest stored telemetry by category and an interactive map of the last reported position. Missing readings are omitted, and every metrics category and position has its own update time. Readings use the [Meshtastic telemetry definitions](https://github.com/meshtastic/protobufs/blob/master/meshtastic/telemetry.proto). Telemetry is loaded on expansion and refreshed while the directory updates; it does not request extra telemetry over the radio.
+```sh
+docker compose up --build -d
+docker compose logs -f meshthreads
+```
 
-Latest completed traceroutes are saved per profile and destination node. Expand a node in the directory to see the last received route in both directions, its signal values, and receipt time. Saved routes survive restarts; new responses replace the previous route for that node.
+Open **http://localhost:5069**. The service is `meshthreads`, the container is `meshthreads-app`, and the persistent volume is `meshthreads_data` with Compose’s project prefix.
 
-Unread room counts, thread badges, and New labels highlight unread activity. A channel is marked read after all its loaded unread messages have been visible in a focused tab; collapsed and offscreen replies keep the channel unread. The mobile navigation button includes the total unread count.
+The default Compose configuration uses Linux host networking for UDP multicast. Docker Desktop requires multicast-capable networking; on macOS, native Python startup gives the app direct access to LAN multicast. See [Docker setup and networking](DOCKER.md) and [.env.example](.env.example). The example environment file uses Docker paths.
+
+## Receive diagnostics
+
+While signed in, open `/api/network-status` to inspect receiver state, channel and port counts, decoding failures, and listener errors. It excludes message bodies and PSKs. Counters reset when the app restarts.
+
+- `inbound_by_port` counts received traffic, excluding local UDP echoes.
+- `local_echoes_by_port` reports locally sent packets echoed over UDP.
+- Port `1` is text, `4` is node info, `67` is telemetry, and `70` is traceroute.
+
+Node-info and traceroute requests choose a channel where the destination was discovered, even when another private room is open. Their status messages identify the channel used. If no inbound packets arrive during a reply test, check multicast delivery. If packets arrive but cannot be decoded on a configured channel, check its name and PSK.
+
+Browser reconnects reload stored history so messages received during a connection interruption can reappear. End-to-end delivery still requires a reachable mesh; encrypted DMs also require the recipient’s public key.
 
 ## Checks
 
@@ -94,33 +150,8 @@ Unread room counts, thread badges, and New labels highlight unread activity. A c
 node --test tests/test_*.js
 ```
 
-Tests cover the inherited identity/channel routing/message snapshot behavior,
-thread bumping and ancestry, malformed/missing reply parents, compatible
-channel URL encoding, random PSKs, room joining/management, and DM invitations.
-Radio transport is mocked for room API tests; end-to-end hardware delivery
-requires a reachable Meshtastic network and the recipient’s public key.
-
-Meshtastic’s standard link encoding uses a protobuf `ChannelSet`; see the
-[official Python API](https://python.meshtastic.org/node.html).
-
-## Receive diagnostics
-
-While signed in, open `/api/network-status` to inspect receiver status, counts
-by channel and decoded port, undecodable packet counts, and listener errors.
-`inbound_by_port` excludes locally sent packets echoed over UDP;
-`local_echoes_by_port` reports those separately.
-The endpoint excludes message bodies and PSKs. Counters reset when the app
-restarts. For MeshOregon, compare received traffic against your configured
-channel hash. Port 1 is text, port 4 is node info, and port 70 is traceroute.
-Node-info and traceroute requests choose a channel where the destination was
-discovered, even when a different private room is open. Their status messages
-name the channel used. If no new inbound packets arrive during a reply test,
-check UDP delivery.
-If packets arrive but remain undecodable on a configured channel, check that
-its name and PSK match the radio. Browser reconnects refresh stored history
-so messages received during a connection interruption reappear.
+Tests cover identity migration, channel routing, receive handling, message snapshots, thread ancestry, room links and invitations, account isolation, favorites, saved traceroutes, telemetry, login/profile behavior, unread state, and mobile navigation. Radio transport is mocked in API tests; hardware delivery requires testing on a real Meshtastic network.
 
 ## License
 
-This is a Firefly derivative; the original [GPLv3 license](LICENSE) is retained.
-Nunito Sans has its own [OFL license](static/fonts/OFL-NunitoSans.txt).
+MeshThreads is a Firefly derivative and retains the original [GPLv3 license](LICENSE). Nunito Sans is distributed under its [OFL license](static/fonts/OFL-NunitoSans.txt).

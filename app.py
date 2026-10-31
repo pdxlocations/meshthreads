@@ -30,6 +30,7 @@ from meshtastic.protobuf import mesh_pb2, portnums_pb2
 from mudp import node
 from mudp.reliability import is_ack, is_nak, parse_routing
 from database import Database
+from nodeinfo_requests import DelayedNodeInfoRequests
 from encryption import generate_hash
 from firefly_logging import configure_logging, get_logger, make_log_print
 from mesh_runtime import (
@@ -63,6 +64,7 @@ SHORT_NAME_ALNUM_PATTERN = re.compile(r"^[A-Za-z0-9]{1,4}$")
 _DEDUP_CACHE = set()
 _DEDUP_QUEUE = deque(maxlen=500)
 _DEDUP_LOCK = Lock()
+_NODEINFO_REQUESTS = DelayedNodeInfoRequests()
 _RECEIVE_LOCK = Lock()
 _RECEIVE_COUNTS = Counter()
 _RECEIVE_CHANNELS = Counter()
@@ -1318,6 +1320,45 @@ def _is_from_me(packet):
         return False
 
 
+def _schedule_unknown_sender_nodeinfo(packet):
+    sender = getattr(packet, "from", 0)
+    if sender in (0, BROADCAST_NODE_NUM) or db.get_profile_by_node_num(sender):
+        return
+    known = _find_sender_node_for_packet(packet, sender)
+    if known and not _is_fallback_node_label(known.get("long_name"), sender):
+        return
+
+    # Retain our own protobuf snapshot after the receive callback returns.
+    snapshot = mesh_pb2.MeshPacket()
+    snapshot.CopyFrom(packet)
+
+    def request_if_still_unknown():
+        try:
+            known = _find_sender_node_for_packet(snapshot, sender)
+            if known and not _is_fallback_node_label(known.get("long_name"), sender):
+                return
+            active = udp_server.get_active_profile()
+            if not active or not udp_server.running or db.get_profile_by_node_num(sender):
+                return
+            destination = getattr(snapshot, "to", 0)
+            if destination not in (0, BROADCAST_NODE_NUM, _profile_node_num(active)):
+                return
+            if snapshot.pki_encrypted and destination == _profile_node_num(active):
+                udp_server.exchange_nodeinfo(_profile_for_node_request(active, sender), sender)
+                return
+            # Never activate another account's identity for background discovery.
+            for index, channel in enumerate(_profile_channels(active)):
+                if _channel_number_for_config(channel) == snapshot.channel:
+                    profile = _effective_profile(active, channel_index=index)
+                    if udp_server.exchange_nodeinfo(profile, sender):
+                        logger.info("Requested node info for unknown message sender !%08x", sender)
+                    return
+        except Exception:
+            logger.exception("Automatic node-info request failed for !%08x", sender)
+
+    _NODEINFO_REQUESTS.schedule(sender, request_if_still_unknown)
+
+
 def on_text_message(packet: mesh_pb2.MeshPacket, addr=None):
     msg = packet.decoded.payload.decode("utf-8", "ignore")
     if _is_from_me(packet):
@@ -1434,6 +1475,7 @@ def on_text_message(packet: mesh_pb2.MeshPacket, addr=None):
                 print(f"[MESSAGE] ❌ Error broadcasting DM to room {room_name}: {e}")
         else:
             print(f"[MESSAGE] No channel info - message not broadcasted to WebSocket")
+        _schedule_unknown_sender_nodeinfo(packet)
     except Exception as e:
         print(f"Failed to emit incoming message: {e}")
 
