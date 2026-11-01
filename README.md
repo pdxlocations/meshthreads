@@ -16,14 +16,14 @@ Session tracking begins with this update and persists across restarts. A browser
 
 Actual app captures using fictional sample messages, nodes, and telemetry. The sample mesh transport is stopped; these images do not represent live radio delivery.
 
-**Threaded board, dark mode** — nested replies, room unread counts, and starred nodes.
+**Threaded board, dark mode** — fuller conversations with nested replies, grouped emoji tapbacks, room unread counts, and starred nodes.
 
-![MeshThreads dark board with nested replies and room navigation](docs/screenshots/board-dark.png)
+![MeshThreads dark board with expanded conversations, nested replies, and emoji tapbacks](docs/screenshots/board-dark.png)
 
 <details>
 <summary>Light mode</summary>
 
-![MeshThreads board in the Harbor light theme](docs/screenshots/board-light.png)
+![MeshThreads board in the Harbor light theme with threaded conversations and grouped emoji tapbacks](docs/screenshots/board-light.png)
 
 </details>
 
@@ -33,12 +33,19 @@ Actual app captures using fictional sample messages, nodes, and telemetry. The s
 
 Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 
-**Mobile** — compact conversations and an on-demand navigation drawer.
+**Mobile conversations and tapbacks** — expanded reply threads with emoji bubbles. Tap a bubble to see who reacted.
 
 <p>
-  <img src="docs/screenshots/board-mobile.png" alt="Mobile board with nested replies and a compact composer" width="300">
-  <img src="docs/screenshots/mobile-navigation.png" alt="Mobile navigation drawer with active profile, connection status, and rooms" width="300">
+  <img src="docs/screenshots/board-mobile.png" alt="Mobile board with multiple levels of replies and grouped emoji tapbacks" width="300">
+  <img src="docs/screenshots/tapbacks-mobile.png" alt="Tapping a thumbs-up reaction reveals Cedar and Eastside in the sender popup" width="300">
 </p>
+
+<details>
+<summary>Mobile navigation</summary>
+
+<img src="docs/screenshots/mobile-navigation.png" alt="Mobile navigation drawer with active profile, connection status, and rooms alongside the conversation" width="300">
+
+</details>
 
 ## Quick start
 
