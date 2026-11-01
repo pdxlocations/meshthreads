@@ -752,7 +752,7 @@ body[data-bs-theme] #tracerouteModal .modal-content { background: var(--panel) !
   .board-post-reply, .thread-footer button { font-size: 13px; }
   .board-heading h1 { font-size: 20px; }
   .board-heading-actions button { font-size: 11px; }
-  #messageInput { font-size: 15px; }
+  #messageInput { font-size: 16px; }
   #sendBtn { font-size: 14px; }
   .thread-unread-label, .post-new-badge { font-size: 11px; }
   #tracerouteModal .modal-body { padding: 12px; font-size: 15px; }
@@ -877,4 +877,12 @@ button.message-reaction:hover, button.message-reaction-unread { border-color: va
 .reaction-senders-dialog li small { display: block; }
 @media (pointer: coarse) {
   button.message-reaction { min-height: 36px; min-width: 36px; }
+}
+
+/* iOS zooms focused text fields below 16px. Keep pinch zoom available. */
+@media (max-width: 900px), (pointer: coarse) {
+  body[data-bs-theme] input,
+  body[data-bs-theme] select,
+  body[data-bs-theme] textarea,
+  #messageInput { font-size: 16px !important; }
 }
