@@ -32,6 +32,7 @@ from mudp import node
 from mudp.reliability import is_ack, is_nak, parse_routing
 from database import Database
 from nodeinfo_requests import DelayedNodeInfoRequests
+from message_reactions import is_emoji_reply
 from encryption import generate_hash
 from firefly_logging import configure_logging, get_logger, make_log_print
 from mesh_runtime import (
@@ -1397,6 +1398,7 @@ def on_text_message(packet: mesh_pb2.MeshPacket, addr=None):
         if target_node_num in (0, BROADCAST_NODE_NUM):
             target_node_num = None
         reply_packet_id = getattr(packet.decoded, "reply_id", None) or None
+        is_emoji = is_emoji_reply(msg, reply_packet_id, getattr(packet.decoded, 'emoji', 0))
         owner_profile_id = dm_owner_profile.get("id") if dm_owner_profile else None
         message_channel = getattr(packet, "channel", None)
         if message_channel is None:
@@ -1435,6 +1437,7 @@ def on_text_message(packet: mesh_pb2.MeshPacket, addr=None):
             "message_type": message_type,
             "packet_id": pkt_id,
             "reply_packet_id": reply_packet_id,
+            "is_emoji": is_emoji,
             "target_node_num": target_node_num,
             "target": _node_id_from_num(target_node_num),
             "owner_profile_id": owner_profile_id,
@@ -1454,6 +1457,7 @@ def on_text_message(packet: mesh_pb2.MeshPacket, addr=None):
                 channel=message_channel,
                 message_type=message_type,
                 reply_packet_id=reply_packet_id,
+                is_emoji=is_emoji,
                 target_node_num=target_node_num,
                 owner_profile_id=owner_profile_id,
                 hop_limit=packet.hop_limit,
@@ -2102,9 +2106,11 @@ class UDPChatServer:
         message_type="channel",
         target_node_num=None,
         reply_packet_id=None,
+        is_emoji=False,
     ):
         """Send a text message via vnode."""
         self.last_send_error = None
+        is_emoji = is_emoji_reply(message_content, reply_packet_id, is_emoji)
         sender_profile = self._ensure_sender_profile_transport(sender_profile, session_id=session_id)
         if not sender_profile:
             return False
@@ -2127,6 +2133,7 @@ class UDPChatServer:
                     destination=int(target_node_num),
                     hop_limit=hop_limit,
                     reply_id=reply_packet_id,
+                    emoji=is_emoji,
                 )
             else:
                 print(f"[SEND] Sending channel message with hop_limit={hop_limit}")
@@ -2134,6 +2141,7 @@ class UDPChatServer:
                     message_content,
                     hop_limit=hop_limit,
                     reply_id=reply_packet_id,
+                    emoji=is_emoji,
                 )
 
             sender_node_id = sender_profile.get("node_id", "Unknown")
@@ -2157,6 +2165,7 @@ class UDPChatServer:
                 "message_type": message_type,
                 "channel": sender_channel if message_type == "channel" else None,
                 "reply_packet_id": reply_packet_id,
+                "is_emoji": is_emoji,
                 "target_node_num": int(target_node_num) if target_node_num not in (None, "", 0, BROADCAST_NODE_NUM) else None,
                 "target": _node_id_from_num(target_node_num) if target_node_num not in (None, "", 0, BROADCAST_NODE_NUM) else None,
                 "owner_profile_id": sender_profile.get("id") if message_type == "dm" else None,
@@ -2184,6 +2193,7 @@ class UDPChatServer:
                         "message_type": "dm",
                         "channel": sender_channel,
                         "reply_packet_id": reply_packet_id,
+                        "is_emoji": is_emoji,
                         "target_node_num": message["target_node_num"],
                         "target": message["target"],
                         "owner_profile_id": recipient_profile.get("id"),
@@ -2208,6 +2218,7 @@ class UDPChatServer:
                         channel=sender_channel,
                         message_type=message_type,
                         reply_packet_id=reply_packet_id,
+                        is_emoji=is_emoji,
                         target_node_num=message["target_node_num"],
                         owner_profile_id=message["owner_profile_id"],
                         hop_limit=None,
@@ -2233,6 +2244,7 @@ class UDPChatServer:
                             channel=sender_channel,
                             message_type="dm",
                             reply_packet_id=reply_packet_id,
+                            is_emoji=is_emoji,
                             target_node_num=local_recipient_message["target_node_num"],
                             owner_profile_id=local_recipient_message["owner_profile_id"],
                             hop_limit=None,
@@ -3094,6 +3106,11 @@ def send_message():
     else:
         reply_packet_id = None
 
+    if 'is_emoji' in data and type(data['is_emoji']) is not bool:
+        return jsonify(error='is_emoji must be true or false'), 400
+    if data.get('is_emoji') and not reply_packet_id:
+        return jsonify(error='Emoji reactions require a reply_packet_id'), 400
+
     session_id = f"flask_session_{id(session)}"
     success = udp_server.send_message(
         message_content,
@@ -3102,6 +3119,7 @@ def send_message():
         message_type=message_type,
         target_node_num=target_node_num,
         reply_packet_id=reply_packet_id,
+        **({'is_emoji': True} if data.get('is_emoji') else {}),
     )
 
     if success:
