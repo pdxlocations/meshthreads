@@ -2,6 +2,7 @@
 
 import sqlite3
 from administration import Administration, initialize_admin_schema
+from message_reactions import is_emoji_reply
 from runtime_files import database_connection
 import json
 from datetime import datetime, timezone
@@ -88,6 +89,7 @@ class Database(Administration):
                     channel INTEGER NOT NULL,  -- Channel number (from generate_hash)
                     message_type TEXT DEFAULT 'channel',  -- 'channel' or 'dm'
                     reply_packet_id INTEGER,
+                    is_emoji INTEGER NOT NULL DEFAULT 0,
                     target_node_num INTEGER,
                     owner_profile_id TEXT,
                     hop_limit INTEGER,
@@ -169,6 +171,7 @@ class Database(Administration):
             for column_sql, column_name in [
                 ("ALTER TABLE messages ADD COLUMN message_type TEXT DEFAULT 'channel'", "message_type"),
                 ("ALTER TABLE messages ADD COLUMN reply_packet_id INTEGER", "reply_packet_id"),
+                ("ALTER TABLE messages ADD COLUMN is_emoji INTEGER NOT NULL DEFAULT 0", "is_emoji"),
                 ("ALTER TABLE messages ADD COLUMN target_node_num INTEGER", "target_node_num"),
                 ("ALTER TABLE messages ADD COLUMN owner_profile_id TEXT", "owner_profile_id"),
                 ("ALTER TABLE messages ADD COLUMN ack_requested INTEGER DEFAULT 0", "ack_requested"),
@@ -711,7 +714,8 @@ class Database(Administration):
                      channel: int = None, message_type: str = "channel", reply_packet_id: int = None, target_node_num: int = None,
                      owner_profile_id: str = None, hop_limit: int = None, hop_start: int = None,
                      rx_snr: float = None, rx_rssi: int = None, ack_requested: bool = False,
-                     ack_status: str = None, ack_error: str = None, ack_updated_at: str = None) -> bool:
+                     ack_status: str = None, ack_error: str = None, ack_updated_at: str = None,
+                     is_emoji: bool = False) -> bool:
         """Store a message by channel (accessible to any profile using that channel)"""
         try:
             with database_connection(self.db_path) as conn:
@@ -719,12 +723,13 @@ class Database(Administration):
                     INSERT INTO messages 
                     (message_id, packet_id, sender_num, sender_display, 
                      content, sender_ip, direction, channel, message_type, reply_packet_id, target_node_num,
-                     owner_profile_id, hop_limit, hop_start, rx_snr, rx_rssi, ack_requested, ack_status, ack_error, ack_updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     owner_profile_id, hop_limit, hop_start, rx_snr, rx_rssi, ack_requested, ack_status, ack_error, ack_updated_at, is_emoji)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (message_id, packet_id, sender_num, sender_display,
                      content, sender_ip, direction, channel, message_type, reply_packet_id, target_node_num,
                      owner_profile_id, hop_limit, hop_start, rx_snr, rx_rssi,
-                     int(bool(ack_requested)), ack_status, ack_error, ack_updated_at))
+                     int(bool(ack_requested)), ack_status, ack_error, ack_updated_at,
+                     int(is_emoji_reply(content, reply_packet_id, is_emoji))))
                 conn.commit()
                 return True
         except Exception as e:
@@ -835,7 +840,7 @@ class Database(Administration):
                 SELECT m.message_id, m.packet_id, m.sender_num, m.sender_display,
                        NULL AS sender_long_name, NULL AS sender_short_name, NULL AS sender_node_id,
                        m.content, m.timestamp, m.sender_ip, m.direction, m.channel, m.message_type,
-                       m.reply_packet_id, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
+                       m.reply_packet_id, m.is_emoji, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
                        m.rx_snr, m.rx_rssi, m.ack_requested, m.ack_status, m.ack_error, m.ack_updated_at
                 FROM messages m
                 WHERE m.channel = ? AND COALESCE(m.message_type, 'channel') = 'channel'
@@ -868,7 +873,7 @@ class Database(Administration):
                 SELECT m.message_id, m.packet_id, m.sender_num, m.sender_display,
                        NULL AS sender_long_name, NULL AS sender_short_name, NULL AS sender_node_id,
                        m.content, m.timestamp, m.sender_ip, m.direction, m.channel, m.message_type,
-                       m.reply_packet_id, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
+                       m.reply_packet_id, m.is_emoji, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
                        m.rx_snr, m.rx_rssi, m.ack_requested, m.ack_status, m.ack_error, m.ack_updated_at
                 FROM messages m
                 WHERE m.owner_profile_id = ? AND COALESCE(m.message_type, 'channel') = 'dm'
@@ -940,7 +945,7 @@ class Database(Administration):
                     SELECT m.message_id, m.packet_id, m.sender_num, m.sender_display,
                            NULL AS sender_long_name, NULL AS sender_short_name, NULL AS sender_node_id,
                            m.content, m.timestamp, m.sender_ip, m.direction, m.channel, m.message_type,
-                           m.reply_packet_id, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
+                           m.reply_packet_id, m.is_emoji, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
                            m.rx_snr, m.rx_rssi, m.ack_requested, m.ack_status, m.ack_error, m.ack_updated_at
                     FROM messages m
                     WHERE m.packet_id = ?
@@ -1086,7 +1091,7 @@ class Database(Administration):
                 SELECT m.message_id, m.packet_id, m.sender_num, m.sender_display,
                        NULL AS sender_long_name, NULL AS sender_short_name, NULL AS sender_node_id,
                        m.content, m.timestamp, m.sender_ip, m.direction, m.channel, m.message_type,
-                       m.reply_packet_id, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
+                       m.reply_packet_id, m.is_emoji, m.target_node_num, m.owner_profile_id, m.hop_limit, m.hop_start,
                        m.rx_snr, m.rx_rssi, m.ack_requested, m.ack_status, m.ack_error, m.ack_updated_at
                 FROM messages m
                 WHERE m.channel = ?
@@ -1293,6 +1298,7 @@ class Database(Administration):
                 'id': row['message_id'],
                 'packet_id': row['packet_id'],
                 'reply_packet_id': row['reply_packet_id'],
+                'is_emoji': is_emoji_reply(row['content'], row['reply_packet_id'], row['is_emoji']),
                 'sender_num': sender_num,
                 'sender': f"!{hex(sender_num)[2:].zfill(8)}" if sender_num else 'Unknown',
                 'sender_display': current_sender_display,

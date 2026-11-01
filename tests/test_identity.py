@@ -120,6 +120,12 @@ class IdentityMigrationTests(unittest.TestCase):
             decoded_large = manager.decode_packet_for_profile(b, large)
             self.assertNotIn('xeddsaSignature', meshdb.normalize_packet(decoded_large, 'udp')['decoded'])
             manager.virtual_node = node_a
+            manager.send_text('👍🏽', reply_id=99, emoji=True)
+            reaction = mesh_pb2.MeshPacket.FromString(send.call_args.args[0])
+            decoded_reaction = manager.decode_packet_for_profile(b, reaction)
+            self.assertEqual(decoded_reaction.decoded.reply_id, 99)
+            self.assertEqual(decoded_reaction.decoded.emoji, 1)
+            self.assertEqual(decoded_reaction.decoded.payload.decode(), '👍🏽')
             send.reset_mock()
             manager.send_text('private hello', destination=mesh.owner_node_num(b))
             self.assertEqual(send.call_count, 1)

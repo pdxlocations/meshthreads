@@ -32,20 +32,28 @@
         return [...groups.values()].sort((a, b) => b.activity - a.activity);
     }
     function replyTree(group) {
-        const nodes = new Map(group.messages.map(message => [message, {message, children: [], parent: null}]));
-        const root = nodes.get(group.root);
-        const byPacket = new Map(group.messages.filter(m => m.packet_id).map(m => [String(m.packet_id), nodes.get(m)]));
+        const reactions = typeof module !== 'undefined' && module.exports ? require('./reactions.js') : root.MeshReactions;
+        const collected = reactions.collect(group.messages);
+        const nodes = new Map(collected.messages.map(message => [message, {message, reactions: collected.byTarget.get(message) || [], children: [], parent: null}]));
+        const treeRoot = nodes.get(group.root) || nodes.values().next().value;
+        const allPackets = new Map(group.messages.filter(m => m.packet_id).map(m => [String(m.packet_id), m]));
         for (const node of nodes.values()) {
-            if (node === root) continue;
-            let parent = byPacket.get(String(node.message.reply_packet_id)) || root;
+            if (node === treeRoot) continue;
+            let parentMessage = allPackets.get(String(node.message.reply_packet_id));
+            const skipped = new Set();
+            while (parentMessage && !nodes.has(parentMessage) && !skipped.has(parentMessage)) {
+                skipped.add(parentMessage);
+                parentMessage = allPackets.get(String(parentMessage.reply_packet_id));
+            }
+            let parent = nodes.get(parentMessage) || treeRoot;
             // Broken ancestry and radio reply cycles stay visible without creating DOM cycles.
             for (let ancestor = parent; ancestor; ancestor = ancestor.parent) {
-                if (ancestor === node) { parent = root; break; }
+                if (ancestor === node) { parent = treeRoot; break; }
             }
             node.parent = parent;
             parent.children.push(node);
         }
-        return root;
+        return treeRoot;
     }
     function time(message) {
         if (typeof message.timestamp === 'number') return message.timestamp * (message.timestamp < 1e10 ? 1000 : 1);

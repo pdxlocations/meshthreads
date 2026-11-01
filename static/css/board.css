@@ -860,3 +860,21 @@ button.map-node-directory-link { display: inline-flex; align-items: center; min-
 @media (min-width: 601px) and (pointer: fine) {
   .board-post-reply { min-height: 22px; padding: 1px 0 !important; }
 }
+
+/* Reactions stay attached to the message, rather than taking a reply row. */
+.message-reactions { grid-column: 1 / -1; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+button.message-reaction { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 30px; min-height: 27px; padding: 2px 7px !important; border: 1px solid var(--line) !important; border-radius: 999px !important; background: var(--selection) !important; line-height: 1.2; }
+button.message-reaction:hover, button.message-reaction-unread { border-color: var(--amber) !important; }
+.reaction-emoji { font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif; font-size: 17px; overflow-wrap: anywhere; }
+.reaction-count { font-size: 11px; color: var(--muted); }
+.reaction-read-marker { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+.reaction-senders-dialog { width: min(340px, calc(100vw - 24px)); padding: 12px; }
+.reaction-senders-dialog header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.reaction-senders-dialog h2 { margin: 0; font-size: 18px; color: var(--heading); }
+.reaction-senders-dialog header button { min-width: 36px; min-height: 36px; font-size: 22px; padding: 0 !important; }
+.reaction-senders-dialog ul { margin: 8px 0 0; padding: 0; list-style: none; max-height: 50dvh; overflow-y: auto; }
+.reaction-senders-dialog li { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.reaction-senders-dialog li small { display: block; }
+@media (pointer: coarse) {
+  button.message-reaction { min-height: 36px; min-width: 36px; }
+}

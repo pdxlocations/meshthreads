@@ -106,13 +106,13 @@ function boardAvatarColor(identity) {
     return colors[hash % colors.length];
 }
 
-function renderBoardPost(message) {
+function renderBoardPost(message, reactions = []) {
     const sender = getMessageSenderDisplayName(message);
     const identity = getMessageSenderNodeId(message);
     const packet = Number(message.packet_id);
     const reply = packet ? `<button type="button" class="board-post-reply" onclick="startReply(${packet})" aria-label="Reply to ${escapeHtml(sender)}">${boardIcon('reply')}<span>Reply</span></button>` : '';
     const unread = BoardUnread.isUnread(message);
-    return `<div class="board-post ${unread ? 'board-post-unread' : ''}" ${unread ? `data-unread-post="${escapeHtml(BoardUnread.id(message))}"` : ''}><span class="identity-avatar" style="--avatar-color:${boardAvatarColor(identity)}" aria-hidden="true">${escapeHtml(String(sender || '?').trim().charAt(0).toUpperCase())}</span><div class="board-post-body"><div class="board-post-heading"><span class="board-post-author" title="${escapeHtml(identity || '')}">${escapeHtml(sender)}</span>${unread ? '<span class="post-new-badge">New</span>' : ''}<time class="board-post-time">${escapeHtml(formatTimestamp(message.timestamp))}</time></div><div class="message__content">${renderMessageContentHtml(message.content || '')}</div><div class="board-post-tools">${reply}${renderAckStatusHtml(message)}</div></div></div>`;
+    return `<div class="board-post ${unread ? 'board-post-unread' : ''}" ${unread ? `data-unread-post="${escapeHtml(BoardUnread.id(message))}"` : ''}><span class="identity-avatar" style="--avatar-color:${boardAvatarColor(identity)}" aria-hidden="true">${escapeHtml(String(sender || '?').trim().charAt(0).toUpperCase())}</span><div class="board-post-body"><div class="board-post-heading"><span class="board-post-author" title="${escapeHtml(identity || '')}">${escapeHtml(sender)}</span>${unread ? '<span class="post-new-badge">New</span>' : ''}<time class="board-post-time">${escapeHtml(formatTimestamp(message.timestamp))}</time></div><div class="message__content">${renderMessageContentHtml(message.content || '')}</div><div class="board-post-tools">${reply}${renderAckStatusHtml(message)}</div>${renderReactionBubbles(message, reactions)}</div></div>`;
 }
 
 async function roomRequest(path, method = 'GET', data) {
@@ -322,7 +322,7 @@ function renderReplyBranch(node, group) {
     const open = !collapsedMeshThreads.has(threadVisibilityKey(key));
     const count = node.children.length;
     const footer = count ? `<footer class="thread-footer"><button type="button" data-board-toggle="${escapeHtml(key)}" aria-expanded="${open}">${boardIcon(open ? 'down' : 'right')} ${count} ${count === 1 ? 'reply' : 'replies'}</button></footer>` : '';
-    return `<div class="reply-branch" data-reply-packet="${Number(node.message.packet_id) || ''}">${renderBoardPost(node.message)}${footer}<div class="thread-replies ${open ? '' : 'd-none'}">${node.children.map(child => renderReplyBranch(child, group)).join('')}<div class="inline-composer-slot"></div></div></div>`;
+    return `<div class="reply-branch" data-reply-packet="${Number(node.message.packet_id) || ''}">${renderBoardPost(node.message, node.reactions)}${footer}<div class="thread-replies ${open ? '' : 'd-none'}">${node.children.map(child => renderReplyBranch(child, group)).join('')}<div class="inline-composer-slot"></div></div></div>`;
 }
 
 renderActiveMessages = function () {
@@ -334,6 +334,7 @@ renderActiveMessages = function () {
         moveBoardComposer(dock);
         NodePanels.disposeMaps();
         BoardUnread.stop();
+        boardReactionGroups.clear();
         renderBoardRails();
         if (!currentProfile && (activeChatTab === 'channel' || activeChatTab === 'dm')) {
             const hasProfiles = Object.keys(managedProfiles).length > 0;
@@ -667,3 +668,39 @@ updateNodeListFilter = function() {
     originalDirectoryFilterUpdate();
     NodePanels.refreshExpanded();
 };
+
+
+const boardReactionGroups = new Map();
+function renderReactionBubbles(message, reactions = []) {
+    if (!reactions.length) return '';
+    return `<div class="message-reactions" aria-label="Message reactions">${MeshReactions.aggregate(reactions).map(group => {
+        const key = `${message.id || message.packet_id}:${group.emoji}`;
+        boardReactionGroups.set(key, group);
+        const names = group.senders.map(sender => getMessageSenderDisplayName(sender)).join(', ');
+        const unread = group.messages.filter(reaction => BoardUnread.isUnread(reaction));
+        return `<button type="button" class="message-reaction ${unread.length ? 'message-reaction-unread' : ''}" data-reaction-group="${escapeHtml(key)}" aria-label="${escapeHtml(group.emoji)} reaction from ${escapeHtml(names)}. Show senders" aria-haspopup="dialog"><span class="reaction-emoji">${escapeHtml(group.emoji)}</span>${group.senders.length > 1 ? `<span class="reaction-count">${group.senders.length}</span>` : ''}${unread.map(reaction => `<span class="reaction-read-marker" aria-hidden="true" data-unread-post="${escapeHtml(BoardUnread.id(reaction))}"></span>`).join('')}</button>`;
+    }).join('')}</div>`;
+}
+
+function showReactionSenders(key) {
+    const group = boardReactionGroups.get(key);
+    if (!group) return;
+    let dialog = document.getElementById('reactionSendersDialog');
+    if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'reactionSendersDialog';
+        dialog.className = 'reaction-senders-dialog';
+        dialog.setAttribute('aria-labelledby', 'reactionSendersTitle');
+        document.body.append(dialog);
+        dialog.addEventListener('close', () => BoardUnread.resume());
+        dialog.addEventListener('click', event => {
+            if (event.target === dialog || event.target.closest('[data-reaction-close]')) dialog.close();
+        });
+    }
+    dialog.innerHTML = `<header><h2 id="reactionSendersTitle">${escapeHtml(group.emoji)} Reactions</h2><button type="button" data-reaction-close aria-label="Close reactions">×</button></header><ul>${group.senders.map(sender => `<li><strong>${escapeHtml(getMessageSenderDisplayName(sender))}</strong><small>${escapeHtml(getMessageSenderNodeId(sender) || '')}</small></li>`).join('')}</ul>`;
+    if (!dialog.open) dialog.showModal();
+}
+document.addEventListener('click', event => {
+    const bubble = event.target.closest('[data-reaction-group]');
+    if (bubble) showReactionSenders(bubble.dataset.reactionGroup);
+});

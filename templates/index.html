@@ -2988,10 +2988,11 @@ function getUnreadDividerIndex(messages, unreadCount) {
 }
 
 function renderMessagesWithUnreadDivider(messages, unreadCount) {
-    const dividerIndex = getUnreadDividerIndex(messages, unreadCount);
+    const collected = MeshReactions.collect(messages);
+    const dividerIndex = getUnreadDividerIndex(collected.messages, unreadCount);
     const rendered = [];
 
-    messages.forEach((message, index) => {
+    collected.messages.forEach((message, index) => {
         if (index === dividerIndex) {
             rendered.push(
                 '<div class="message-unread-divider" aria-label="Unread messages">' +
@@ -2999,7 +3000,7 @@ function renderMessagesWithUnreadDivider(messages, unreadCount) {
                 '</div>'
             );
         }
-        rendered.push(renderMessageHtml(message));
+        rendered.push(renderMessageHtml(message, collected.byTarget.get(message) || []));
     });
 
     return rendered.join('');
@@ -4180,7 +4181,7 @@ function getMessageSortTimestamp(message) {
     return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function renderMessageHtml(message) {
+function renderMessageHtml(message, reactions = []) {
     const isOwnMessage = currentProfile && message.sender === currentProfile.node_id;
     const showYouBadge = isOwnMessage && message.message_type !== 'dm';
     const timestamp = formatTimestamp(message.timestamp);
@@ -4216,6 +4217,7 @@ function renderMessageHtml(message) {
                     </div>
                     ${replyPreview}
                     <div class="message__content">${messageContentHtml}</div>
+                    ${typeof renderReactionBubbles === 'function' ? renderReactionBubbles(message, reactions) : ''}
                 </div>
                 <div class="message__meta">
                     <div class="message__meta-top">
@@ -5231,6 +5233,7 @@ function restoreMarkdownTokens(html, tokenStore, prefix) {
     );
 }
 </script>
+<script src="{{ url_for('static', filename='js/reactions.js') }}"></script>
 <script src="{{ url_for('static', filename='js/threads.js') }}"></script>
 <script src="{{ url_for('static', filename='js/node-panels.js') }}"></script>
 <script src="{{ url_for('static', filename='js/board-unread.js') }}"></script>

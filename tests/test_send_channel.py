@@ -78,6 +78,21 @@ class SendChannelTests(unittest.TestCase):
         self.server._ensure_sender_profile_transport(self.profile)
         self.interface.assert_not_called()
 
+    def test_emoji_reply_sets_radio_flag_and_persists_for_channel_and_dm(self):
+        self.database.get_profile_by_node_num.return_value = None
+        self.manager.send_text.return_value = 123
+        for message_type in ('channel', 'dm'):
+            self.assertTrue(self.server.send_message('👍🏽', self.profile, message_type=message_type,
+                target_node_num=7 if message_type == 'dm' else None, reply_packet_id=99))
+            self.assertTrue(self.manager.send_text.call_args.kwargs['emoji'])
+            self.assertEqual(self.manager.send_text.call_args.kwargs['reply_id'],99)
+            self.assertTrue(self.database.store_message.call_args.kwargs['is_emoji'])
+
+    def test_standalone_emoji_is_a_regular_message(self):
+        self.manager.send_text.return_value = 123
+        self.server.send_message('😀', self.profile)
+        self.assertFalse(self.manager.send_text.call_args.kwargs['emoji'])
+
     def test_key_change_rebuilds_transport(self):
         self.profile["channels"][0]["key"] = "Aw=="
         self.server._ensure_sender_profile_transport(self.profile)

@@ -8,3 +8,5 @@ mudp>=1.6.0,<2
 Pypubsub
 vnode>=0.2.3,<0.3
 meshdb>=0.3.0,<0.4
+
+emoji>=2.14,<3

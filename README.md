@@ -63,6 +63,7 @@ MeshThreads uses **Meshtastic UDP multicast**. It does not connect directly to a
 ## Conversations and rooms
 
 - **Threads:** every new top-level message starts a conversation. Replies use standard Meshtastic `reply_id` metadata, and replies to replies form indented branches. Any new reply bumps the original thread to the top.
+- **Emoji reactions:** flagged Meshtastic reactions and single-emoji replies appear as bubbles at the bottom right of their original message, in rooms and DMs. Tap a bubble to see its senders. Sending a single emoji as a reply sets the standard `emoji` flag; standalone emoji posts remain regular messages. Flags, skin tones, and joined emoji sequences are supported. Existing single-emoji replies are recognized when history loads.
 - **Expanded by default:** reply branches stay open until manually collapsed. Reply links are always visible, including on touch screens.
 - **Unread activity:** room counts, thread badges, and **New** labels identify unread messages. A channel is marked read after all its loaded unread messages have been visible in a focused tab. Collapsed or offscreen replies keep the channel unread.
 - **History:** older posts remain available for thread reconstruction. If an original message was never received or its history was cleared, the board labels the missing original and groups the available replies.

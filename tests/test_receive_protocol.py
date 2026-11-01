@@ -86,6 +86,22 @@ class ReceiveProtocolTests(unittest.TestCase):
         self.discovery.assert_called_once()
         self.assertEqual(getattr(self.discovery.call_args.args[0], 'from'), 7)
 
+    def test_reaction_flag_and_single_emoji_fallback_reach_storage_and_websocket(self):
+        for index, (content, flag, reply, expected) in enumerate([
+            ('❤️', 1, 99, True), ('👍🏽', 0, 99, True),
+            ('👍👍', 1, 99, True), ('👍👍', 0, 99, False),
+            ('😀', 0, 0, False), ('Looks great 😀', 0, 99, False),
+        ]):
+            with self.subTest(content=content, flag=flag, reply=reply):
+                packet = self.packet(7, packet_id=500 + index, encrypted=False)
+                packet.decoded.payload = content.encode('utf-8')
+                packet.decoded.emoji = flag
+                packet.decoded.reply_id = reply
+                self.deliver(packet)
+                self.assertEqual(self.database.store_message.call_args.kwargs['is_emoji'], expected)
+                event = [c for c in self.socket.emit.call_args_list if c.args[0] == 'new_message'][-1]
+                self.assertEqual(event.args[1]['is_emoji'], expected)
+
     def test_encrypted_nodeinfo_response_is_decoded_without_a_cached_public_key(self):
         handler = self.patch('on_nodeinfo')
         self.deliver(self.packet(7, port=portnums_pb2.PortNum.NODEINFO_APP, destination=42))
