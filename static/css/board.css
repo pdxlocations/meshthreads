@@ -830,3 +830,33 @@ button.map-node-directory-link { display: inline-flex; align-items: center; min-
   .admin-dashboard input { font-size: 16px; }
   .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Desktop conversations: keep actions on the byline and reduce vertical chrome. */
+@media (min-width: 601px) {
+  .board-heading { padding: 10px 10px 6px; gap: 3px 8px; }
+  .board-heading h1 { font-size: 23px; }
+  .board-heading-actions { gap: 6px; }
+  .board-heading-actions button { padding: 5px 8px; }
+  #boardDescription { font-size: 12px; }
+  body[data-bs-theme] #messagesContainer { padding: 0 9px 7px !important; }
+  .board-thread { padding: 8px; margin-bottom: 6px; }
+  .board-post { gap: 8px; }
+  .board-post > .identity-avatar { width: 24px; height: 24px; flex-basis: 24px; font-size: 13px; margin-top: 2px; }
+  .board-post-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; }
+  .board-post-heading { grid-column: 1; align-self: center; gap: 1px 8px; margin-bottom: 0; }
+  .board-post-author { font-size: 14px; line-height: 1.35; }
+  .board-post-time { font-size: 11px; }
+  .board-post .message__content { grid-column: 1 / -1; font-size: 15px; line-height: 1.4; margin-top: 1px; }
+  .board-post-tools { grid-column: 2; grid-row: 1; align-self: start; margin: 0; gap: 6px; }
+  .thread-footer { padding: 1px 0 0 32px; }
+  .thread-footer button { font-size: 12px; line-height: 1.3; padding: 1px 0; gap: 5px; }
+  .thread-footer .board-icon { width: 14px; height: 14px; flex-basis: 14px; }
+  .thread-replies { margin: 3px 0 0 32px; padding-left: 10px; }
+  .thread-replies > .reply-branch, .thread-replies > .board-post { padding: 3px 0; }
+  .thread-replies .thread-replies { margin-left: 14px; padding-left: 8px; }
+  .inline-composer-slot:not(:empty) { margin-top: 6px; }
+  #composerDock { padding: 6px 9px 9px; }
+}
+@media (min-width: 601px) and (pointer: fine) {
+  .board-post-reply { min-height: 22px; padding: 1px 0 !important; }
+}
