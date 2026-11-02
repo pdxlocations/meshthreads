@@ -26,7 +26,7 @@ test('no matches leave the existing editor unchanged',async()=>{
     const f=fixture([{name:'Draft',key:''}]);
     await f.c.detectPublicChannels({currentTarget:f.button});
     assert.equal(f.rendered,undefined);
-    assert.match(f.status.textContent,/No 1-byte key channels/);
+    assert.match(f.status.textContent,/No verified 1-byte key channels/);
 });
 test('failed detection reports an error without replacing the draft',async()=>{
     const f=fixture();f.c.fetch=async()=>({ok:false,json:async()=>({error:'Please sign in again'})});

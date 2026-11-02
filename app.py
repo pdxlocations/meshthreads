@@ -1249,6 +1249,13 @@ def on_recieve(packet: mesh_pb2.MeshPacket, addr=None):
         _RECEIVE_COUNTS['packets'] += 1
         _RECEIVE_CHANNELS[int(packet.channel)] += 1
         _RECEIVE_LAST_PACKET_AT = datetime.now().isoformat()
+    try:
+        from channel_discovery import verified_public_channels
+        verified = verified_public_channels(packet, db.get_all_profiles())
+        if verified:
+            db.record_public_channel_receipts(verified, int(getattr(packet, 'from', 0)), int(packet.id))
+    except Exception:
+        logger.exception('Failed to record public-channel reception evidence')
     supplemental_packet = _decode_packet_for_service(packet)
     if supplemental_packet is None:
         with _RECEIVE_LOCK:

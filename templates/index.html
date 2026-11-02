@@ -99,7 +99,7 @@
                             </div>
                         </div>
                         <div id="editChannelsList" class="channel-editor-list"></div>
-                        <div class="form-text">Use Move up / Move down to reorder channels. The first channel is primary. Changes apply when you save. Each channel needs a name and key. Detect public channels already configured in this install’s shared database.</div>
+                        <div class="form-text">Use Move up / Move down to reorder channels. The first channel is primary. Changes apply when you save. Each channel needs a name and key. Detect public channels in the shared database with confirmed packets from another node.</div>
                         <div id="editPublicChannelsStatus" class="form-text" role="status" aria-live="polite"></div>
                     </div>
                     <div class="mb-3">
@@ -3074,7 +3074,7 @@ function renderProfilesView(container) {
                                 </div>
                             </div>
                             <div id="newChannelsList" class="channel-editor-list"></div>
-                            <div class="form-text">Each profile can have multiple channel and key pairs. Detect public channels already configured in this install’s shared database.</div>
+                            <div class="form-text">Each profile can have multiple channel and key pairs. Detect public channels in the shared database with confirmed packets from another node.</div>
                             <div id="publicChannelsStatus" class="form-text" role="status" aria-live="polite"></div>
                         </div>
                         <div class="mb-3">
@@ -3134,7 +3134,7 @@ async function detectPublicChannels(event) {
         status.textContent = added
             ? `Added ${added} public ${added === 1 ? 'channel' : 'channels'}. Review them before saving your profile.`
             : data.channels?.length ? 'All detected public channels are already listed.'
-                : 'No 1-byte key channels found in the shared database yet. Add a channel manually or join by URL after activation.';
+                : 'No verified 1-byte key channels found in the shared database yet. Add a channel manually or join by URL after activation.';
     } catch (error) {
         if (document.getElementById(listId) !== list || list.dataset?.editorRevision !== revision) return;
         status.textContent = error.message || 'Could not detect public channels. Try again.';

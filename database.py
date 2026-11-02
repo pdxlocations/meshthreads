@@ -73,6 +73,15 @@ class Database(Administration):
                 )
             """)
 
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS public_channel_receipts (
+                    fingerprint TEXT PRIMARY KEY,
+                    sender_num INTEGER NOT NULL,
+                    packet_id INTEGER,
+                    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
             # Messages table - stores all messages by channel (not by profile)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
@@ -642,6 +651,26 @@ class Database(Administration):
         except Exception as e:
             print(f"Error deleting profile: {e}")
             return False
+
+    def record_public_channel_receipts(self, channels, sender_num, packet_id):
+        from channel_discovery import public_channel_fingerprint
+        if not isinstance(sender_num, int) or not 0 < sender_num < 0xFFFFFFFF:
+            return
+        with database_connection(self.db_path) as conn:
+            if conn.execute('SELECT 1 FROM profiles WHERE node_id=? COLLATE NOCASE', (f'!{sender_num:08x}',)).fetchone():
+                return
+            for channel in channels:
+                fingerprint = public_channel_fingerprint(channel)
+                if fingerprint:
+                    conn.execute("""INSERT INTO public_channel_receipts(fingerprint,sender_num,packet_id)
+                        VALUES(?,?,?) ON CONFLICT(fingerprint) DO UPDATE SET
+                        sender_num=excluded.sender_num,packet_id=excluded.packet_id,received_at=CURRENT_TIMESTAMP""",
+                        (fingerprint, sender_num, packet_id))
+
+    def get_verified_public_channel_fingerprints(self):
+        with database_connection(self.db_path) as conn:
+            return {row[0] for row in conn.execute("""SELECT fingerprint FROM public_channel_receipts r
+                WHERE NOT EXISTS (SELECT 1 FROM profiles p WHERE lower(p.node_id)=printf('!%08x',r.sender_num))""")}
 
     def store_message(self, message_id: str, packet_id: int = None,
                      sender_num: int = None, sender_display: str = None,

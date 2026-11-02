@@ -110,7 +110,10 @@ def register_room_routes(api):
     def detect_public_channels():
         # This is intentionally shared across accounts, but only public keys
         # and channel names leave the server. No owner/profile metadata does.
-        channels = public_channels_from_profiles(api['profile_manager'].get_all_profiles())
+        from channel_discovery import public_channel_fingerprint
+        verified = api['db'].get_verified_public_channel_fingerprints()
+        channels = [channel for channel in public_channels_from_profiles(api['profile_manager'].get_all_profiles())
+                    if public_channel_fingerprint(channel) in verified]
         return jsonify(channels=channels)
 
     @app.route('/api/rooms', methods=['POST'])

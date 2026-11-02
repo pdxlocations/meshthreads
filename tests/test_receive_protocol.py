@@ -65,6 +65,15 @@ class ReceiveProtocolTests(unittest.TestCase):
     def deliver(self, packet):
         self.stream._handle_datagram(packet.SerializeToString(), ('192.0.2.1', 4403))
 
+    def test_receive_path_records_public_channel_evidence_from_external_node(self):
+        self.deliver(self.packet(7))
+        self.database.record_public_channel_receipts.assert_called_once_with(
+            [{'name':'MeshOregon','key':'AQ=='}], 7, 123)
+
+    def test_local_echo_never_records_public_channel_evidence(self):
+        self.deliver(self.packet(42))
+        self.database.record_public_channel_receipts.assert_not_called()
+
     def test_two_senders_with_same_packet_id_both_reach_message_storage(self):
         self.deliver(self.packet(7))
         self.deliver(self.packet(8))

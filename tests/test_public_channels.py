@@ -2,6 +2,7 @@ import base64
 import unittest
 from flask import Flask
 from rooms import public_channels_from_profiles, register_room_routes
+from channel_discovery import public_channel_fingerprint
 from unittest.mock import Mock
 
 
@@ -32,10 +33,14 @@ class PublicChannels(unittest.TestCase):
             return guarded
         manager=Mock()
         manager.get_all_profiles.return_value={'other-user':{'channel':'Local','key':'AQ=='}}
-        register_room_routes({'app':app,'login_required':login_required,'profile_manager':manager})
+        database=Mock()
+        database.get_verified_public_channel_fingerprints.return_value={public_channel_fingerprint({'name':'Local','key':'AQ=='})}
+        register_room_routes({'app':app,'login_required':login_required,'profile_manager':manager,'db':database})
         client=app.test_client()
         self.assertEqual(client.get('/api/rooms/public-channels').status_code,401)
         manager.get_all_profiles.assert_not_called()
         allowed=True
         self.assertEqual(client.get('/api/rooms/public-channels').json,{'channels':[{'name':'Local','key':'AQ=='}]})
         manager.get_all_profiles.assert_called_once_with()
+        database.get_verified_public_channel_fingerprints.return_value=set()
+        self.assertEqual(client.get('/api/rooms/public-channels').json,{'channels':[]})
