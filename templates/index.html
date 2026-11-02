@@ -2968,6 +2968,15 @@ async function loadManagedProfiles() {
     }
 }
 
+function renderProfileSetupGuide(profileEntries) {
+    return !currentProfile ? `<section class="profile-setup-guide" aria-labelledby="profileSetupTitle">
+            <div class="board-eyebrow">${profileEntries.length ? 'NO ACTIVE PROFILE' : 'FIRST-TIME SETUP / STEP 1 OF 2'}</div>
+            <h2 id="profileSetupTitle">${profileEntries.length ? 'Activate a profile to connect' : 'CREATE YOUR FIRST PROFILE_'}</h2>
+            <p>${profileEntries.length ? 'Click Activate next to a profile below to connect to the mesh and open your rooms.' : 'You’re signed in. Before you can use rooms or send messages, you need a Meshtastic profile: your name on the mesh and the channel you want to join.'}</p>
+            ${!profileEntries.length ? '<ol><li>Fill in your long name, short name, and mesh channel name and key below.</li><li>Click Create Profile, then Activate next to your new profile.</li></ol><p>Use the same channel name and key as the mesh you want to talk to. You can create more rooms after activation.</p>' : ''}
+        </section>` : '';
+}
+
 function renderProfilesView(container) {
     const profileEntries = Object.entries(managedProfiles);
     const profileCards = profileEntries.length
@@ -2979,13 +2988,18 @@ function renderProfilesView(container) {
             </div>
         `;
 
+    // Live message/status updates must not replace the form: retain its open
+    // state, draft fields, channel rows, focus, and selection in the actual DOM.
+    const existingForm = container.querySelector('#createProfileForm');
+    if (existingForm) {
+        container.querySelector('#profilesList').innerHTML = profileCards;
+        container.querySelector('#profileSetupGuide').innerHTML = renderProfileSetupGuide(profileEntries);
+        syncNotificationToggleUi();
+        return;
+    }
+
     container.innerHTML = `
-        ${!currentProfile ? `<section class="profile-setup-guide" aria-labelledby="profileSetupTitle">
-            <div class="board-eyebrow">${profileEntries.length ? 'NO ACTIVE PROFILE' : 'FIRST-TIME SETUP / STEP 1 OF 2'}</div>
-            <h2 id="profileSetupTitle">${profileEntries.length ? 'Activate a profile to connect' : 'CREATE YOUR FIRST PROFILE_'}</h2>
-            <p>${profileEntries.length ? 'Click Activate next to a profile below to connect to the mesh and open your rooms.' : 'You’re signed in. Before you can use rooms or send messages, you need a Meshtastic profile: your name on the mesh and the channel you want to join.'}</p>
-            ${!profileEntries.length ? '<ol><li>Fill in your long name, short name, and mesh channel name and key below.</li><li>Click Create Profile, then Activate next to your new profile.</li></ol><p>Use the same channel name and key as the mesh you want to talk to. You can create more rooms after activation.</p>' : ''}
-        </section>` : ''}
+        <div id="profileSetupGuide">${renderProfileSetupGuide(profileEntries)}</div>
         <div class="profile-manager">
             <div class="profile-manager__grid">
                 <div class="card">
@@ -3244,6 +3258,8 @@ async function createManagedProfile(event) {
             throw new Error(data.error || `HTTP ${response.status}`);
         }
         await loadManagedProfiles();
+        // A successful creation deliberately starts a fresh, collapsed form.
+        document.querySelector('.profile-manager__create-shell')?.remove();
         renderActiveMessages();
     } catch (error) {
         console.error('Error creating profile:', error);
