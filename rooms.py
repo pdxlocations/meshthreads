@@ -52,6 +52,23 @@ def parse_channel_url(value):
     return validate_channel({'name': settings.name, 'key': base64.b64encode(settings.psk).decode()})
 
 
+def public_channels_from_profiles(profiles):
+    """Return only explicit one-byte PSKs; never publish private profile data."""
+    found = set()
+    for profile in profiles.values():
+        channels = profile.get('channels')
+        if not isinstance(channels, list):
+            channels = [{'name': profile.get('channel'), 'key': profile.get('key')}]
+        for channel in channels:
+            try:
+                normalized = validate_channel(channel)
+            except (ValueError, AttributeError, TypeError):
+                continue
+            if len(base64.b64decode(normalized['key'])) == 1:
+                found.add((normalized['name'], normalized['key']))
+    return [{'name': name, 'key': key} for name, key in sorted(found, key=lambda item: (item[0].casefold(), item))]
+
+
 def register_room_routes(api):
     app = api['app']
     login_required = api['login_required']
@@ -87,6 +104,14 @@ def register_room_routes(api):
         if not 0 <= index < len(channels):
             raise ValueError('Room not found.')
         return channels
+
+    @app.route('/api/rooms/public-channels', methods=['GET'])
+    @login_required
+    def detect_public_channels():
+        # This is intentionally shared across accounts, but only public keys
+        # and channel names leave the server. No owner/profile metadata does.
+        channels = public_channels_from_profiles(api['profile_manager'].get_all_profiles())
+        return jsonify(channels=channels)
 
     @app.route('/api/rooms', methods=['POST'])
     @login_required

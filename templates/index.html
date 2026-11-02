@@ -3042,10 +3042,14 @@ function renderProfilesView(container) {
                         <div class="mb-3">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <label class="form-label mb-0">Channels *</label>
-                                <button class="btn btn-sm btn-outline-secondary" id="addNewChannelBtn" type="button">Add Channel</button>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button class="btn btn-sm btn-outline-secondary" id="detectPublicChannelsBtn" type="button">Detect 1-byte key channels</button>
+                                    <button class="btn btn-sm btn-outline-secondary" id="addNewChannelBtn" type="button">Add Channel</button>
+                                </div>
                             </div>
                             <div id="newChannelsList" class="channel-editor-list"></div>
-                            <div class="form-text">Each profile can have multiple channel and key pairs.</div>
+                            <div class="form-text">Each profile can have multiple channel and key pairs. Detect public channels already configured in this install’s shared database.</div>
+                            <div id="publicChannelsStatus" class="form-text" role="status" aria-live="polite"></div>
                         </div>
                         <div class="mb-3">
                             <label for="newHopLimit" class="form-label">Hop Limit</label>
@@ -3062,6 +3066,7 @@ function renderProfilesView(container) {
     syncNotificationToggleUi();
     document.getElementById('createProfileForm')?.addEventListener('submit', createManagedProfile);
     document.getElementById('addNewChannelBtn')?.addEventListener('click', () => addProfileChannelRow('newChannelsList'));
+    document.getElementById('detectPublicChannelsBtn')?.addEventListener('click', detectPublicChannels);
 
     renderProfileChannelRows('newChannelsList', [{ name: '', key: '' }]);
     if (!profileEntries.length) {
@@ -3069,6 +3074,43 @@ function renderProfilesView(container) {
         const manager = container.querySelector('.profile-manager');
         const createForm = container.querySelector('.profile-manager__create-shell');
         manager.prepend(createForm);
+    }
+}
+
+async function detectPublicChannels(event) {
+    const button = event.currentTarget;
+    const status = document.getElementById('publicChannelsStatus');
+    const list = document.getElementById('newChannelsList');
+    if (button.disabled || !list || !status) return;
+    button.disabled = true;
+    status.textContent = 'Looking for public channels…';
+    try {
+        const response = await fetch('/api/rooms/public-channels');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Could not detect public channels.');
+        // Ignore a response if the user has navigated away or created a profile.
+        if (document.getElementById('newChannelsList') !== list) return;
+        // Read at response time so edits made during detection are retained.
+        const channels = collectProfileChannels('newChannelsList', false);
+        const existing = new Set(channels.map(channel => JSON.stringify([channel.name, channel.key])));
+        let added = 0;
+        for (const channel of data.channels || []) {
+            const key = JSON.stringify([channel.name, channel.key]);
+            if (!existing.has(key)) {
+                channels.push(channel);
+                existing.add(key);
+                added++;
+            }
+        }
+        if (added) renderProfileChannelRows('newChannelsList', channels);
+        status.textContent = added
+            ? `Added ${added} public ${added === 1 ? 'channel' : 'channels'}. Review them before creating your profile.`
+            : data.channels?.length ? 'All detected public channels are already listed.'
+                : 'No 1-byte key channels found in the shared database yet. Add a channel manually or join by URL after activation.';
+    } catch (error) {
+        status.textContent = error.message || 'Could not detect public channels. Try again.';
+    } finally {
+        button.disabled = false;
     }
 }
 
