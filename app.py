@@ -51,7 +51,7 @@ from mesh_runtime import (
 from vnode.crypto import b64_decode
 
 configure_logging()
-logger = get_logger("firefly.app")
+logger = get_logger("meshthreads.app")
 print = make_log_print(logger)
 
 
@@ -93,6 +93,7 @@ migrate_profile_identities(db, MCAST_GRP, MCAST_PORT)
 
 # Map WebSocket session IDs to Flask session IDs for cleanup
 websocket_to_flask_sessions = {}
+websocket_users = {}
 
 
 def _get_session_profile():
@@ -3170,6 +3171,7 @@ def handle_connect():
         print(f"[WEBSOCKET] Rejecting unauthenticated connection: {request.sid}")
         return False
 
+    websocket_users[request.sid] = _get_session_user()["id"]
     print(f"Client connected with WebSocket session ID: {request.sid}")
     
     # Get current profile to establish session mapping if one exists
@@ -3251,6 +3253,7 @@ def handle_leave_profile(data):
 @socketio.on("disconnect")
 def handle_disconnect():
     """Handle WebSocket disconnection"""
+    websocket_users.pop(request.sid, None)
     print(f"Client disconnected: {request.sid}")
     
     # Find the Flask session ID for this WebSocket session and unregister
@@ -3267,6 +3270,8 @@ def handle_disconnect():
 
 from rooms import register_room_routes
 register_room_routes(globals())
+from admin_management import register_admin_management_routes
+register_admin_management_routes(globals())
 
 for _profile in db.get_all_profiles().values():
     _seed_profile_mesh_identity(_profile)
@@ -3275,7 +3280,7 @@ shared_packet_receiver.start()
 
 if __name__ == "__main__":
     print("")
-    print("🔥 Firefly - Meshtastic Node Discovery")
+    print("MeshThreads - Meshtastic threaded chat")
     print("=" * 50)
     print("Enhanced with node tracking and database storage!")
     print("=" * 50)
@@ -3284,5 +3289,5 @@ if __name__ == "__main__":
     print("[STARTUP] Virtual node will start when a profile is selected")
 
     app.config["TEMPLATES_AUTO_RELOAD"] = True
-    print(f"Starting Firefly server on http://localhost:5069 (interface starts with profile selection)...")
+    print(f"Starting MeshThreads server on http://localhost:5069 (interface starts with profile selection)...")
     socketio.run(app, host="0.0.0.0", port=5069, debug=True, use_reloader=True, allow_unsafe_werkzeug=True)

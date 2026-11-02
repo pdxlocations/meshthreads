@@ -11,7 +11,7 @@ from firefly_logging import configure_logging, get_logger, make_log_print
 
 
 configure_logging()
-logger = get_logger("firefly.db")
+logger = get_logger("meshthreads.db")
 print = make_log_print(logger)
 
 

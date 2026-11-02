@@ -10,6 +10,10 @@ The first account to sign in on a fresh installation becomes an admin (creating 
 
 The dashboard lists all users and their profiles, active or idle browser sessions, observed login time, messages received/sent, the active radio profile, and receiver statistics. It refreshes every 30 seconds. Admins can grant or remove admin access; the last admin cannot lose the role or delete their account until another admin is assigned. Admin routes enforce permissions on every request.
 
+Admins can view each profile’s rooms, their primary/secondary order, and key sizes without exposing PSKs. **Edit user** changes a username and optionally resets its password; leaving the password blank keeps it. **Delete user** requires confirmation, removes the account, profiles, private messages, and session records, and disconnects its live chat sessions. Shared room messages remain. Admins cannot delete themselves through this page or remove the last admin.
+
+**Edit room** renames a room or replaces its PSK on that profile only. Leave the replacement PSK blank to keep the current key. **Remove** removes the channel entry from that profile; it keeps other profiles and stored history. Keep at least one room per profile. Deactivate a profile currently using the radio before changing its rooms or deleting its user. Concurrent channel edits are rejected when the saved channel list has changed. Changing a name or PSK changes the mesh channel; share a new invitation with participants. Automatic dashboard refresh pauses while an editor is open.
+
 Session tracking begins with this update and persists across restarts. A browser is active when its heartbeat was received in the last 90 seconds. Background tabs count as connected time; gaps without heartbeats count at most 90 seconds, so login time is an estimate. Packet counters cover the current server run. Message totals count retained database messages; shared room receives are counted for each subscribed profile. Password hashes, PSKs, session tokens, and message contents are excluded from admin reports.
 
 ## Screenshots
@@ -64,6 +68,8 @@ Open **http://localhost:5069** and create an account. The same username and pass
 3. Click **Activate**. MeshThreads opens the first channel’s messages.
 
 In **Create New Profile** or **Edit Profile**, choose **Detect 1-byte key channels** to add public channels already configured by any account in this install’s shared database. Detection keeps your manual entries and skips duplicates. Review the channels before creating or saving the profile. Only channel names and one-byte PSKs are shared; private 16/32-byte keys and profile/account details are excluded. This reads known configurations, not a radio scan: packet hashes alone cannot recover channel names. See [Meshtastic channel configuration](https://meshtastic.org/docs/configuration/radio/channels/) for public channel key conventions.
+
+In **Edit Profile**, use **Move up** and **Move down** to reorder channels, then save. The first channel is the primary channel. Reordering keeps each room’s message history.
 
 Profiles are virtual nodes on the mesh. Each has its own identity and channels. When an account has exactly one profile, signing in automatically activates it and opens its first channel. Accounts with zero or multiple profiles open Profiles instead. The active profile’s card provides **Deactivate**.
 

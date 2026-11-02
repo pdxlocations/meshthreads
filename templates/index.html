@@ -99,7 +99,7 @@
                             </div>
                         </div>
                         <div id="editChannelsList" class="channel-editor-list"></div>
-                        <div class="form-text">Each channel needs a name and key. Detect public channels already configured in this install’s shared database.</div>
+                        <div class="form-text">Use Move up / Move down to reorder channels. The first channel is primary. Changes apply when you save. Each channel needs a name and key. Detect public channels already configured in this install’s shared database.</div>
                         <div id="editPublicChannelsStatus" class="form-text" role="status" aria-live="polite"></div>
                     </div>
                     <div class="mb-3">
@@ -840,6 +840,16 @@
     border-radius: 0.85rem;
     padding: 0.75rem;
     background: var(--bs-tertiary-bg);
+}
+
+.channel-editor-row__order {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
 }
 
 .channel-editor-row__footer {
@@ -2221,11 +2231,13 @@ async function applyPendingChatContext() {
         }
 
         const channels = getProfileChannels();
-        if (channels.length <= 1) {
-            activeChannelIndex = channels.length ? (currentProfile?.selected_channel_index ?? 0) : null;
-        } else {
-            activeChannelIndex = null;
-        }
+        // Loading / (including Back to messages from Admin) resumes the saved
+        // room. The room chooser is an explicit navigation action, not a reset
+        // for profiles with more than one channel.
+        const selectedIndex = activeChannelIndex ?? currentProfile?.selected_channel_index ?? 0;
+        activeChannelIndex = channels.length
+            ? (Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < channels.length ? selectedIndex : 0)
+            : null;
     }
 
     setActiveChatTab(activeChatTab);
@@ -2810,6 +2822,15 @@ function handleThreadCardClick(event) {
 }
 
 function handleEditChannelListClick(event) {
+    const moveTrigger = event.target.closest('[data-move-channel-step]');
+    if (moveTrigger) {
+        event.preventDefault();
+        if (moveTrigger.disabled) return;
+        const row = moveTrigger.closest('.channel-editor-row');
+        moveProfileChannelRow('editChannelsList', Number(row?.dataset.channelIndex), Number(moveTrigger.dataset.moveChannelStep));
+        return;
+    }
+
     const deleteChannelTrigger = event.target.closest('[data-delete-profile-channel-index]');
     if (deleteChannelTrigger) {
         event.preventDefault();
@@ -3155,6 +3176,7 @@ function renderProfileChannelRows(containerId, channels) {
     const normalized = Array.isArray(channels) && channels.length ? channels : [{ name: '', key: '' }];
     container.innerHTML = normalized.map((channel, index) => `
         <div class="channel-editor-row" data-channel-index="${index}" ${Number.isInteger(Number(channel.profile_index)) ? `data-profile-channel-index="${Number(channel.profile_index)}"` : ''}>
+            ${containerId === 'editChannelsList' ? `<div class="channel-editor-row__order"><span data-channel-position></span><div class="d-flex gap-2"><button type="button" class="btn btn-sm btn-outline-secondary" data-move-channel-step="-1">↑ Move up</button><button type="button" class="btn btn-sm btn-outline-secondary" data-move-channel-step="1">↓ Move down</button></div></div>` : ''}
             <div class="row g-2 align-items-end">
                 <div class="col-12 col-md-6">
                     <label class="form-label small text-muted">Channel Name</label>
@@ -3173,6 +3195,37 @@ function renderProfileChannelRows(containerId, channels) {
             </div>
         </div>
     `).join('');
+    if (containerId === 'editChannelsList') syncProfileChannelOrder(container);
+}
+
+function syncProfileChannelOrder(container) {
+    const rows = Array.from(container.querySelectorAll('.channel-editor-row'));
+    rows.forEach((row, index) => {
+        row.dataset.channelIndex = String(index);
+        row.querySelector('[data-remove-channel-index]').dataset.removeChannelIndex = String(index);
+        row.querySelector('[data-channel-position]').textContent = `Channel ${index + 1}${index === 0 ? ' · Primary' : ''}`;
+        row.querySelector('[data-move-channel-step="-1"]').disabled = index === 0;
+        row.querySelector('[data-move-channel-step="1"]').disabled = index === rows.length - 1;
+        // profileChannelIndex remains the original saved index: history deletion
+        // must still target that room until the new order is saved.
+    });
+}
+
+function moveProfileChannelRow(containerId, index, step) {
+    const container = document.getElementById(containerId);
+    if (!container || !Number.isInteger(index) || ![-1, 1].includes(step)) return;
+    const rows = Array.from(container.querySelectorAll('.channel-editor-row'));
+    const target = index + step;
+    if (index < 0 || index >= rows.length || target < 0 || target >= rows.length) return;
+    const row = rows[index];
+    const before = step < 0 ? rows[target] : rows[target].nextSibling;
+    // Move the actual row to retain unsaved fields (including blank rows).
+    if (typeof container.moveBefore === 'function') container.moveBefore(row, before);
+    else container.insertBefore(row, before);
+    syncProfileChannelOrder(container);
+    const button = row.querySelector(`[data-move-channel-step="${step}"]`);
+    const focusTarget = button.disabled ? row.querySelector(`[data-move-channel-step="${-step}"]`) : button;
+    focusTarget.focus({preventScroll:true});
 }
 
 function addProfileChannelRow(containerId) {

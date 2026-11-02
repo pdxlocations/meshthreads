@@ -132,6 +132,29 @@ function boardNotice(text, error = false) {
     notice.textContent = text;
     notice.hidden = false;
     notice.classList.toggle('is-error', error);
+    notice.dataset.context = boardContextKey();
+}
+
+function boardContextKey() {
+    return JSON.stringify([currentProfile?.id || null, activeChatTab,
+        activeChatTab === 'channel' ? activeChannelIndex : activeChatTab === 'dm' ? activeDmTargetNodeNum : null]);
+}
+
+function updateBoardHeading() {
+    const channel = activeChatTab === 'channel' ? getActiveChannel() : null;
+    const title = activeChatTab === 'dm' && activeDmTargetNodeNum ? activeDmPeerLabel()
+        : activeChatTab === 'channel' ? (channel ? '# ' + channel.name : 'Your rooms')
+            : ({dm: 'Direct messages', nodes: 'Node directory', profiles: 'Your station', map: 'Network map'}[activeChatTab]);
+    document.getElementById('boardRoomTitle').textContent = title;
+    document.getElementById('boardDescription').textContent = activeChatTab === 'channel'
+        ? (channel ? 'Threads sorted by last activity.' : 'Choose a room to read or start a thread.')
+        : ({dm: activeDmTargetNodeNum ? `Direct message · !${Number(activeDmTargetNodeNum).toString(16).padStart(8, '0')}` : 'Your private conversations.', nodes: 'Nodes discovered on your mesh.', profiles: 'Manage your mesh identity and channels.', map: 'Explore your mesh network.'}[activeChatTab] || '');
+    document.querySelectorAll('.board-heading-actions button').forEach(button => button.hidden = !channel);
+    const notice = document.getElementById('boardNotice');
+    if (notice && !notice.hidden && notice.dataset.context !== boardContextKey()) {
+        notice.hidden = true;
+        notice.textContent = '';
+    }
 }
 
 function setMobileNavigation(open, restoreFocus = true) {
@@ -236,7 +259,7 @@ function installBoardLayout() {
     }
 
     const messages = document.getElementById('messagesContainer');
-    messages.insertAdjacentHTML('beforebegin', `<div class="board-heading"><h1 id="boardRoomTitle">Your rooms</h1><div class="board-heading-actions"><button type="button" data-board-action="manage">${boardIcon('gear')}<span>Room settings</span></button><button type="button" data-board-action="new-thread">${boardIcon('plus')}<span>New thread</span></button></div><p id="boardDescription">Threads sorted by last activity.</p></div><div id="boardNotice" role="status" aria-live="polite" hidden></div>`);
+    messages.insertAdjacentHTML('beforebegin', `<div class="board-heading"><h1 id="boardRoomTitle">Your rooms</h1><div class="board-heading-actions"><button type="button" data-board-action="manage" hidden>${boardIcon('gear')}<span>Room settings</span></button><button type="button" data-board-action="new-thread" hidden>${boardIcon('plus')}<span>New thread</span></button></div><p id="boardDescription">Threads sorted by last activity.</p></div><div id="boardNotice" role="status" aria-live="polite" hidden></div>`);
     const dock = document.createElement('div');
     dock.id = 'composerDock';
     messages.after(dock);
@@ -260,10 +283,7 @@ function renderBoardRails() {
         const count = unreadChannelMessageCounts.get(Number(channel.channel_number)) || 0;
         return `<button type="button" class="room-link ${activeChatTab === 'channel' && activeChannelIndex === index ? 'selected' : ''}" data-board-room="${index}"><span># ${escapeHtml(channel.name)}</span>${count ? `<b class="room-unread-badge" aria-label="${count} unread messages">${count}</b>` : ''}</button>`;
     }).join('') : '<p class="rail-empty">NO ROOMS YET<br>Create and activate a profile to begin.</p>';
-    const title = activeChatTab === 'dm' && activeDmTargetNodeNum ? activeDmPeerLabel() : activeChatTab === 'channel' ? (getActiveChannel() ? '# ' + getActiveChannel().name : 'Your rooms') : ({dm: 'Direct messages', nodes: 'Node directory', profiles: 'Your station', map: 'Network map'}[activeChatTab]);
-    document.getElementById('boardRoomTitle').textContent = title;
-    document.getElementById('boardDescription').textContent = activeChatTab === 'channel' ? 'Threads sorted by last activity.' : ({dm: activeDmTargetNodeNum ? `Direct message · !${Number(activeDmTargetNodeNum).toString(16).padStart(8, '0')}` : 'Your private conversations.', nodes: 'Nodes discovered on your mesh.', profiles: 'Manage your mesh identity and channels.', map: 'Explore your mesh network.'}[activeChatTab] || '');
-    document.querySelectorAll('.board-heading-actions button').forEach(button => button.hidden = activeChatTab !== 'channel');
+    updateBoardHeading();
     document.querySelectorAll('.rail-navigation [data-board-action]').forEach(button => {
         const selected = ({dms:'dm', nodes:'nodes', profiles:'profiles', map:'map'}[button.dataset.boardAction]) === activeChatTab;
         button.classList.toggle('selected', selected);
@@ -498,7 +518,7 @@ function showRoomDialog(mode, extra = {}) {
     document.getElementById('roomDialogError').textContent = '';
     document.getElementById('roomDialogSubmit').hidden = false;
     document.getElementById('roomDialogSubmit').textContent = {create: 'CREATE ROOM', join: 'JOIN ROOM', manage: 'SAVE CHANGES', invite: 'SEND INVITATION'}[mode];
-    document.getElementById('roomDialogTitle').textContent = {create: 'NEW ROOM_', join: 'JOIN A ROOM_', manage: 'ROOM SETTINGS_', invite: 'INVITE TO ROOM_'}[mode];
+    document.getElementById('roomDialogTitle').textContent = {create: 'NEW ROOM_', join: 'JOIN A ROOM_', manage: 'ROOM SETTINGS', invite: 'INVITE TO ROOM_'}[mode];
     let body = '';
     if (mode === 'create') body = '<label for="roomName">ROOM NAME</label><input id="roomName" name="name" required maxlength="12"><p>A random 256-bit PSK is generated for your new room.</p>';
     if (mode === 'join') body = `<label for="roomUrl">MESHTASTIC CHANNEL URL</label><textarea id="roomUrl" name="url" required rows="3" placeholder="https://meshtastic.org/e/#…">${escapeHtml(extra.url || '')}</textarea><p>This adds one room to ${escapeHtml(currentProfile.long_name)}. Your existing rooms stay available.</p>`;

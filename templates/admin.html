@@ -11,5 +11,22 @@
     <div id="adminUsers" aria-live="polite">Loading users…</div></section>
     <p id="adminUpdated" class="form-text"></p>
 </main>
+<dialog id="adminEditor" class="admin-editor" aria-labelledby="adminEditorTitle">
+    <form id="adminEditorForm">
+        <h2 id="adminEditorTitle">Edit</h2>
+        <div id="adminEditorError" role="alert"></div>
+        <div id="adminUserFields">
+            <label for="adminUsername">Username</label><input id="adminUsername" maxlength="80" autocomplete="off">
+            <label for="adminPassword">New password</label><input id="adminPassword" type="password" maxlength="1024" autocomplete="new-password">
+            <p class="form-text">Leave the password blank to keep the current password.</p>
+        </div>
+        <div id="adminChannelFields" hidden>
+            <label for="adminChannelName">Room name</label><input id="adminChannelName" maxlength="12">
+            <label for="adminChannelKey">Replacement PSK</label><input id="adminChannelKey" maxlength="256" autocomplete="off">
+            <p class="form-text">Leave the PSK blank to keep the current key. Changes affect only this profile. Share an updated invitation if the room name or key changes.</p>
+        </div>
+        <div class="admin-actions"><button id="adminEditorCancel" type="button">Cancel</button><button id="adminEditorSave" type="submit" class="btn btn-primary">Save changes</button></div>
+    </form>
+</dialog>
 <script defer src="{{ url_for('static', filename='js/admin.js') }}"></script>
 {% endblock %}

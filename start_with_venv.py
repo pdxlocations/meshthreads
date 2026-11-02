@@ -37,7 +37,7 @@ def validate_current_environment():
 
     print(f"❌ Current interpreter is missing dependencies: {', '.join(missing)}")
     print(f"Interpreter: {sys.executable}")
-    print("Install dependencies in this environment before launching Firefly.")
+    print("Install dependencies in this environment before launching MeshThreads.")
     return False
 
 def main():

@@ -37,7 +37,7 @@ from encryption import generate_hash
 from firefly_logging import configure_logging, get_logger, make_log_print
 
 configure_logging()
-logger = get_logger("firefly.mesh")
+logger = get_logger("meshthreads.mesh")
 print = make_log_print(logger)
 
 

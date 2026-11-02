@@ -203,11 +203,18 @@ class ProfileApiTests(unittest.TestCase):
         cls.env.start()
         with patch.object(mesh.SharedPacketReceiver, 'start'):
             cls.module = importlib.import_module('app')
+        cls.db_patch = patch.object(cls.module, 'db', Database(str(root/'app.db')))
+        cls.db_patch.start()
+        mesh.migrate_profile_identities(cls.module.db, cls.module.MCAST_GRP, cls.module.MCAST_PORT)
+        cls.manager_patch = patch.object(cls.module, 'profile_manager', cls.module.ProfileManager(cls.module.db))
+        cls.manager_patch.start()
         cls.module.app.config.update(TESTING=True)
         cls.module.db.create_user('api-user', 'api-user', 'unused')
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager_patch.stop()
+        cls.db_patch.stop()
         cls.env.stop()
         cls.tmp.cleanup()
 
@@ -218,6 +225,19 @@ class ProfileApiTests(unittest.TestCase):
             session['csrf_token'] = 'test-token'
         self.headers = {'X-CSRF-Token': 'test-token'}
         self.payload = {'long_name': 'Test Node', 'short_name': 'TEST', 'channels': [{'name': 'LongFast', 'key': 'AQ=='}], 'hop_limit': 0}
+
+    def test_profile_update_preserves_channel_order_and_sets_new_primary(self):
+        channels = [{'name':'First','key':'AQ=='},{'name':'Second','key':'Ag=='}]
+        payload = dict(self.payload, channels=channels)
+        created = self.client.post('/api/profiles', json=payload, headers=self.headers)
+        self.assertEqual(created.status_code, 200, created.json)
+        profile_id = created.json['profile_id']
+        reordered = dict(payload, channels=list(reversed(channels)))
+        updated = self.client.put('/api/profiles/'+profile_id, json=reordered, headers=self.headers)
+        self.assertEqual(updated.status_code, 200, updated.json)
+        profile = self.module.db.get_profile(profile_id)
+        self.assertEqual(profile['channels'], list(reversed(channels)))
+        self.assertEqual((profile['channel'], profile['key']), ('Second', 'Ag=='))
 
     def test_creation_edit_identity_and_session_refresh(self):
         result = self.client.post('/api/profiles', json=self.payload, headers=self.headers)

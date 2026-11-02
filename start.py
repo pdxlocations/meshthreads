@@ -23,7 +23,7 @@ ensure_dependency_version("mudp", "1.6.0")
 ensure_dependency_version("vnode", "0.2.3")
 
 configure_logging()
-logger = get_logger("firefly.start")
+logger = get_logger("meshthreads.start")
 print = make_log_print(logger)
 
 REQUIRED_RUNTIME_MODULES = ("meshdb", "mudp", "vnode")
@@ -177,7 +177,7 @@ def print_access_summary():
 
 
 def print_banner():
-    print("🔥 Firefly - Meshtastic Web Chat")
+    print("MeshThreads - Meshtastic threaded chat")
     print("=" * 50)
     print("Real-time mesh networking with node discovery!")
     print("=" * 50)
@@ -238,7 +238,7 @@ def _register_shutdown_hooks(udp_server, packet_receiver=None):
 
     def handle_signal(signum, _frame):
         signal_name = signal.Signals(signum).name
-        print(f"\n[SHUTDOWN] Received {signal_name}, stopping Firefly...")
+        print(f"\n[SHUTDOWN] Received {signal_name}, stopping MeshThreads...")
         cleanup()
         # Force process termination so Werkzeug/background threads cannot keep the HTTP port bound.
         os._exit(0)
