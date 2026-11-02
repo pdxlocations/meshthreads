@@ -2596,6 +2596,18 @@ function getMessageSenderShortName(message) {
     return '';
 }
 
+function renderMessageSenderLink(message, label, className) {
+    let nodeNum = Number(message?.sender_num);
+    const nodeId = getMessageSenderNodeId(message);
+    if (!Number.isInteger(nodeNum) || nodeNum <= 0 || nodeNum >= 0xffffffff) {
+        nodeNum = /^![0-9a-f]{8}$/i.test(nodeId) ? parseInt(nodeId.slice(1), 16) : null;
+    }
+    if (!Number.isInteger(nodeNum) || nodeNum <= 0 || nodeNum >= 0xffffffff) {
+        return `<span class="${escapeHtml(className)}">${escapeHtml(label)}</span>`;
+    }
+    return `<button type="button" class="message-sender-link ${escapeHtml(className)}" data-board-node="${nodeNum}" title="!${nodeNum.toString(16).padStart(8, '0')}" aria-label="View ${escapeHtml(label)} in node directory">${escapeHtml(label)}</button>`;
+}
+
 function getMessageSenderNodeId(message) {
     if (!message) return '';
 
@@ -3684,7 +3696,7 @@ function renderMessageHtml(message, reactions = []) {
                 <div class="message__body">
                     <div class="message__sender-line">
                         ${senderShortNameBadge}
-                        <strong class="${isOwnMessage ? 'text-primary' : 'text-info'}">${escapeHtml(senderDisplayName)}</strong>
+                        ${renderMessageSenderLink(message, senderDisplayName, isOwnMessage ? 'text-primary' : 'text-info')}
                         <small class="text-muted">(${escapeHtml(senderNodeId || 'Unknown')})</small>
                         ${showYouBadge ? '<span class="badge bg-primary ms-1">You</span>' : ''}
                     </div>

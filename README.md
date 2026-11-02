@@ -90,7 +90,7 @@ Recipients choose **Join room** before the channel is added to their active prof
 
 The node directory uses a compact **Starred / Other nodes** roster with search, All/Starred filters, and sorting by last heard, name, or hops. Stars persist with your account across sessions and profiles.
 
-Click a node header to expand its details. DM, invite, and star buttons keep their own actions. Clicking a node in the right-hand rail jumps to its directory entry and expands it.
+Click a node header to expand its details. DM, invite, and star buttons keep their own actions. Tapping a sender name in chat or a node in the right-hand rail jumps to its directory entry and expands it.
 
 Expanded details include:
 

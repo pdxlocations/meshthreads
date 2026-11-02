@@ -191,6 +191,10 @@ body[data-bs-theme] #messagesContainer {
 .board-post-body { flex: 1; min-width: 0; }
 .board-post-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 5px; }
 .board-post-author { color: var(--terminal); font-size: 14px; overflow-wrap: anywhere; }
+button.message-sender-link { padding: 0 !important; border: 0 !important; background: transparent !important; text-align: left; line-height: 1.25; color: inherit !important; }
+button.message-sender-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.board-post .message-sender-link { color: var(--heading) !important; }
+.message__sender-line .message-sender-link { font-size: 14px; font-weight: 600 !important; }
 .board-post-time { color: var(--muted); font-size: 11px; white-space: nowrap; }
 .board-post .message__content { font-size: 14px; line-height: 1.6; color: var(--terminal); white-space: normal; overflow-wrap: anywhere; }
 .message__content p { margin: 0; }

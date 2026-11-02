@@ -55,3 +55,39 @@ test('map popup node ID navigates directly despite Leaflet stopping document cli
     assert.equal(destination,7);assert.equal(prevented,true);assert.equal(stopped,true);
     assert.match(content.innerHTML,/!00000007/);assert.match(content.innerHTML,/Open Cedar in node directory/);
 });
+
+test('chat sender names produce accessible node links with numeric or hex identities',()=>{
+    const template=fs.readFileSync(require('node:path').join(__dirname,'../templates/index.html'),'utf8');
+    const c={getMessageSenderNodeId:m=>m?.sender || '',escapeHtml:v=>String(v).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))};
+    vm.createContext(c);vm.runInContext(template.match(/function renderMessageSenderLink\([^]*?\n\}/)[0],c);
+    for (const message of [{sender_num:7},{sender:'!00000007'}]) {
+        const html=c.renderMessageSenderLink(message,'<Cedar>','board-post-author');
+        assert.match(html,/type="button"/);
+        assert.match(html,/data-board-node="7"/);
+        assert.match(html,/View &lt;Cedar&gt; in node directory/);
+        assert.ok(!html.includes('<Cedar>'));
+    }
+    for(const message of [{},{sender:'Unknown'},{sender_num:0xffffffff},{sender:'!00000007xyz'}]) {
+        assert.ok(!c.renderMessageSenderLink(message,'Unknown','board-post-author').includes('data-board-node'));
+    }
+});
+
+test('chat sender clicks use the same directory jump as node-list links',async()=>{
+    let destination;
+    const c={jumpToDirectoryNode:async n=>{destination=Number(n);}};
+    vm.createContext(c);vm.runInContext(source.match(/async function boardClick\([^]*?\n\}/)[0],c);
+    const sender={dataset:{boardNode:'7'},hasAttribute:name=>name==='data-board-node'};
+    await c.boardClick({target:{closest:selector=>selector==='button'||selector==='[data-board-node]' ? sender : null}});
+    assert.equal(destination,7);
+});
+
+test('a directory jump expands the exact matching node before scrolling',async()=>{
+    const calls=[];
+    const c={openNodesInbox:async()=>calls.push('nodes'),document:{querySelector:()=>({
+        querySelector:()=>({getAttribute:()=> 'false',click:()=>calls.push('expand')}),
+        focus:()=>calls.push('focus'),scrollIntoView:()=>calls.push('scroll'),
+    })}};
+    vm.createContext(c);vm.runInContext(source.match(/async function jumpToDirectoryNode\([^]*?\n\}/)[0],c);
+    await c.jumpToDirectoryNode(7);
+    assert.deepEqual(calls,['nodes','expand','focus','scroll']);
+});
