@@ -208,9 +208,10 @@ function installBoardLayout() {
     nodes.setAttribute('aria-label', 'Mesh nodes');
     nodes.innerHTML = `<div class="rail-heading">Mesh nodes <span id="boardNodeCount">0</span></div><div class="node-search">${boardIcon('search')}<label class="visually-hidden" for="boardNodeSearch">Search nodes</label><input id="boardNodeSearch" placeholder="Search nodes..." type="search"></div><div id="boardNodes"></div>`;
     grid.append(nodes);
-    // Keep legacy controls in their hidden sheet for existing profile workflows.
+    // Move the connection indicators into the active-profile summary.
     document.getElementById('stationSocketStatus').append(document.getElementById('connectionStatusMobile'));
     document.getElementById('stationMeshStatus').append(document.getElementById('interfaceStatusMobile'));
+    document.getElementById('boardConnectionState').remove();
     const accountButton = document.querySelector('.navbar-auth__username');
     const logoutForm = document.querySelector('.navbar-auth__form');
     if (accountButton && logoutForm) {
@@ -253,7 +254,6 @@ function installBoardLayout() {
 
 function renderBoardRails() {
     renderActiveStation();
-    updateProfileActivationButton();
     if (!document.getElementById('boardRooms')) return;
     const channels = getProfileChannels();
     document.getElementById('boardRooms').innerHTML = channels.length ? channels.map((channel, index) => {
@@ -478,8 +478,8 @@ renderNodeCardHtml = function(node) {
         <div class="node-roster-detail-actions"><h4>Actions</h4><div><button class="node-nodeinfo-trigger" type="button" data-node-num="${number}">${boardIcon('nodes')}<span>Exchange node info</span></button><button class="node-traceroute-trigger" type="button" data-node-num="${number}">${boardIcon('map')}<span>Traceroute</span></button></div></div><section class="saved-traceroute" id="savedTraceroute-${number}" aria-label="Latest traceroute" aria-live="polite">${renderSavedTraceroute(node)}</section>${NodePanels.render(node)}</div></article>`;
 };
 
-renderMessageHtml = function(message) {
-    let html = originalMessageRender(message);
+renderMessageHtml = function(message, reactions = []) {
+    let html = originalMessageRender(message, reactions);
     if (message.message_type === 'dm') {
         const match = String(message.content || '').match(/https:\/\/meshtastic\.org\/[ed]\/#([A-Za-z0-9_\-=]+)/);
         if (match) html = html.replace('</div>\n                </div>\n                <div class="message__meta">', `<div class="invite-banner">ROOM INVITATION <button type="button" data-board-join="${escapeHtml(match[0])}">JOIN ROOM ↗</button></div></div>\n                </div>\n                <div class="message__meta">`);

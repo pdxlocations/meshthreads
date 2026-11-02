@@ -1,4 +1,4 @@
-const STATIC_CACHE = "meshthreads-static-v45";
+const STATIC_CACHE = "meshthreads-static-v46";
 const STATIC_ASSETS = [
   "/static/manifest.json",
   "/static/images/meshthreads.svg",
@@ -18,11 +18,6 @@ const STATIC_ASSETS = [
   "/static/js/session-activity.js",
   "/static/js/admin.js",
   "/static/fonts/NunitoSans.ttf",
-  "/static/images/favicon.svg",
-  "/static/images/favicon-blk.svg",
-  "/static/images/firefly.svg",
-  "/static/images/firefly-logo-dark.png",
-  "/static/images/firefly-logo-light.png",
 ];
 
 self.addEventListener("install", event => {

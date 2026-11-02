@@ -54,6 +54,11 @@ Thumbs.db
 # Documentation
 *.md
 docs/
+design/
+
+# Local radio identities and mesh databases are runtime data, not image contents.
+firefly_runtime/
+meshdb/
 
 # Database files (will be mounted as volume)
 *.db

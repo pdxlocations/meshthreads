@@ -979,8 +979,6 @@ class MeshNodeStore:
             reverse=True,
         )
 
-    def count_nodes(self) -> int:
-        return len(self.list_nodes())
 
     def _get_fallback_hops(self, node_num: int) -> Optional[int]:
         hops_map = self._get_fallback_hops_map(node_num=node_num)

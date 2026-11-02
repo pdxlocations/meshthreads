@@ -66,3 +66,13 @@ test('bubble markup includes sender names, unread markers, and escaped text',()=
     assert.ok(html.includes('&lt;Cedar&gt;'));
     assert.ok(!html.includes('<Cedar>'));
 });
+test('the DM invitation wrapper forwards attached reactions to the message renderer',()=>{
+    const code=fs.readFileSync(path.join(__dirname,'../static/js/board.js'),'utf8');
+    const wrapper=code.match(/renderMessageHtml = function\([^]*?\n\};/)[0];
+    let received;
+    const context=vm.createContext({originalMessageRender:(message,reactions)=>{received=reactions;return '<div>message</div>';}});
+    vm.runInContext(wrapper,context);
+    const attached=[msg(2,'👍',1)];
+    context.renderMessageHtml(msg(1,'hello',null,{message_type:'dm'}),attached);
+    assert.equal(received,attached);
+});

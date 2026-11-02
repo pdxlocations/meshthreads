@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import importlib
-import os
 import sys
 from local_deps import bootstrap_local_dependency, ensure_dependency_version
 

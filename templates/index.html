@@ -13,133 +13,18 @@
 
 {% block content %}
 <div class="row">
-    <div class="offcanvas offcanvas-bottom profile-selector-sheet" tabindex="-1" id="mobileSettingsSheet" aria-labelledby="mobileSettingsSheetLabel">
-        <div class="offcanvas-header">
-            <div>
-                <h5 class="offcanvas-title mb-0" id="mobileSettingsSheetLabel">Profiles</h5>
-                <small class="text-muted">Profiles and connection status</small>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body">
-            <div class="mb-3">
-                <label for="profileSelect" class="form-label small text-uppercase text-muted">Profile</label>
-                <div class="d-flex gap-2 align-items-center">
-                    <select id="profileSelect" class="form-select">
-                        <option value="">Select profile...</option>
-                        {% for profile_id, profile in profiles.items() %}
-                            <option value="{{ profile_id }}" {{ 'selected' if current_profile and current_profile.id == profile_id else '' }}>
-                                {{ profile.long_name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    <button id="setProfileBtn" class="btn btn-primary" type="button">Activate</button>
-                </div>
-            </div>
-            <div class="profile-selector-status mb-3">
-                <div class="profile-selector-status__row">
-                    <span class="profile-selector-status__label">WebSocket</span>
-                    <span id="connectionStatusMobile" class="badge bg-secondary profile-selector-status__badge">Connecting...</span>
-                </div>
-                <div class="profile-selector-status__row">
-                    <span class="profile-selector-status__label">Mesh Interface</span>
-                    <span id="interfaceStatusMobile" class="badge bg-warning profile-selector-status__badge">Not Started</span>
-                </div>
-            </div>
-            <button id="manageProfilesBtn" class="btn w-100 profile-selector-manage-link" type="button">Manage Profiles</button>
-        </div>
+    <div id="boardConnectionState" hidden>
+        <span id="connectionStatusMobile" class="badge bg-secondary">Connecting...</span>
+        <span id="interfaceStatusMobile" class="badge bg-warning">Not Started</span>
     </div>
     <div class="col-12">
         <div class="card chat-shell-card" style="overflow: hidden;">
             <div class="card-body p-0 d-flex flex-column" style="height: 100%;">
-                <div class="desktop-chat-header d-none d-md-flex border-bottom px-4 py-3">
-                    <div>
-                        <div class="fw-semibold" id="desktopProfileName">No Profile Selected</div>
-                        <div class="small text-muted" id="desktopProfileSubline"></div>
-                    </div>
-                    <div class="desktop-connect-panel">
-                        <div class="desktop-status-lights" aria-label="Connection status">
-                            <span class="desktop-status-light is-idle" id="desktopSocketLight" title="WebSocket"></span>
-                            <span class="desktop-status-light is-warning" id="desktopInterfaceLight" title="Mesh interface"></span>
-                        </div>
-                        <button id="desktopConnectBtn" class="btn btn-sm btn-outline-primary" type="button">Reconnect</button>
-                    </div>
-                </div>
-                <div class="mobile-chat-header d-md-none border-bottom px-3 py-2">
-                    <div class="mobile-chat-header__top">
-                        <div class="mobile-chat-brand">
-                            <img id="mobile-logo-dark" src="{{ url_for('static', filename='images/firefly-logo-dark.png') }}" alt="MeshThreads" height="22">
-                            <img id="mobile-logo-light" src="{{ url_for('static', filename='images/firefly-logo-light.png') }}" alt="MeshThreads" height="22">
-                            <span>MeshThreads</span>
-                        </div>
-                        {% if current_user %}
-                            <div class="mobile-chat-auth">
-                                <button
-                                    class="mobile-chat-auth__username account-trigger"
-                                    type="button"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#accountModal"
-                                >
-                                    {{ current_user.username }}
-                                </button>
-                                <form method="post" action="{{ url_for('logout') }}" class="mobile-chat-auth__form">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button class="btn btn-outline-primary btn-sm mobile-chat-auth__button" type="submit" aria-label="Logout" title="Logout">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                            <path d="M16 17l5-5-5-5"></path>
-                                            <path d="M21 12H9"></path>
-                                        </svg>
-                                    </button>
-                                </form>
-                            </div>
-                        {% endif %}
-                    </div>
-                    <div class="mobile-chat-header__main">
-                        <div class="mobile-chat-profile">
-                            <div class="fw-semibold" id="mobileProfileName">No Profile Selected</div>
-                            <div class="small text-muted" id="mobileProfileSubline"></div>
-                        </div>
-                        <div class="mobile-connect-panel">
-                            <div class="mobile-status-lights" aria-label="Connection status">
-                                <span class="mobile-status-light is-idle" id="mobileSocketLight" title="WebSocket"></span>
-                                <span class="mobile-status-light is-warning" id="mobileInterfaceLight" title="Mesh interface"></span>
-                            </div>
-                            <button id="mobileConnectBtn" class="btn btn-sm btn-outline-primary" type="button">Reconnect</button>
-                        </div>
-                    </div>
-                </div>
-                <div id="chatTabBar" class="border-bottom px-3 pt-3 pb-2">
-                    <div class="d-flex flex-column gap-2">
-                        <ul class="nav nav-tabs card-header-tabs" id="chatTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active chat-tab-button" id="channelTabBtn" type="button" data-chat-tab="channel">
-                                    <span>Channels</span>
-                                    <span id="channelTabBadge" class="chat-tab-badge d-none" aria-label="Unread channel messages">0</span>
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link chat-tab-button" id="dmTabBtn" type="button" data-chat-tab="dm">
-                                    <span>DMs</span>
-                                    <span id="dmTabBadge" class="chat-tab-badge d-none" aria-label="Unread direct messages">0</span>
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="nodesTabBtn" type="button">Nodes</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="mapTabBtn" type="button">Map</button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="desktopProfilesTabBtn" type="button">Profiles</button>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
+
                 <div id="messagesContainer" class="flex-grow-1 p-3" style="overflow-y: auto; overflow-x: hidden; min-height: 200px;">
                     <!-- Messages will be populated here -->
                 </div>
-                
+
                 <div id="composerBar" class="p-3" style="border-top: 1px solid var(--bs-border-color-translucent);">
                     <div id="replyComposerBar" class="alert alert-secondary py-2 px-3 mb-2 d-none">
                         <div class="d-flex justify-content-between align-items-start gap-3">
@@ -159,60 +44,7 @@
                         <small class="text-muted" id="charCount">0/220</small>
                     </div>
                 </div>
-                <div class="mobile-bottom-nav d-md-none">
-                    <button id="mobileChannelsBtn" class="mobile-bottom-nav__button active" type="button">
-                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 7h16"></path>
-                                <path d="M7 12h10"></path>
-                                <path d="M10 17h4"></path>
-                            </svg>
-                            <span id="mobileChannelsBadge" class="chat-tab-badge chat-tab-badge--mobile mobile-bottom-nav__badge d-none" aria-label="Unread channel messages">0</span>
-                        </span>
-                        <span class="mobile-bottom-nav__text">Channels</span>
-                    </button>
-                    <button id="mobileDmsBtn" class="mobile-bottom-nav__button" type="button">
-                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                            </svg>
-                            <span id="mobileDmsBadge" class="chat-tab-badge chat-tab-badge--mobile mobile-bottom-nav__badge d-none" aria-label="Unread direct messages">0</span>
-                        </span>
-                        <span class="mobile-bottom-nav__text">DMs</span>
-                    </button>
-                    <button id="mobileNodesBtn" class="mobile-bottom-nav__button" type="button">
-                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="6" r="2"></circle>
-                                <circle cx="6" cy="18" r="2"></circle>
-                                <circle cx="18" cy="18" r="2"></circle>
-                                <path d="M12 8v4"></path>
-                                <path d="M10.5 13 7.5 16"></path>
-                                <path d="M13.5 13 16.5 16"></path>
-                            </svg>
-                        </span>
-                        <span>Nodes</span>
-                    </button>
-                    <button id="mobileMapBtn" class="mobile-bottom-nav__button" type="button">
-                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20V6.5Z"></path>
-                                <path d="M9 4v13.5"></path>
-                                <path d="M15 6.5V20"></path>
-                            </svg>
-                        </span>
-                        <span>Map</span>
-                    </button>
-                    <button id="mobileProfilesBtn" class="mobile-bottom-nav__button" type="button">
-                        <span class="mobile-bottom-nav__icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                            </svg>
-                        </span>
-                        <span>Profiles</span>
-                    </button>
-                </div>
+
             </div>
         </div>
     </div>
@@ -287,7 +119,6 @@
 :root {
     --firefly-chat-accent: #1f5d96;
     --firefly-chat-accent-strong: #17476f;
-    --firefly-chat-accent-soft: #d8e7f4;
     --firefly-chat-surface: rgba(255, 255, 255, 0.92);
     --firefly-chat-surface-muted: rgba(244, 248, 251, 0.9);
     --firefly-chat-border: rgba(175, 191, 205, 0.68);
@@ -296,7 +127,6 @@
 [data-bs-theme="dark"] {
     --firefly-chat-accent: #68a6de;
     --firefly-chat-accent-strong: #87bae8;
-    --firefly-chat-accent-soft: rgba(70, 108, 142, 0.35);
     --firefly-chat-surface: rgba(18, 31, 45, 0.9);
     --firefly-chat-surface-muted: rgba(24, 38, 55, 0.92);
     --firefly-chat-border: rgba(71, 97, 123, 0.9);
@@ -671,9 +501,6 @@
         min-height: 0;
         overflow: hidden;
     }
-
-    .desktop-chat-header,
-    #chatTabBar,
     #composerBar {
         flex: 0 0 auto;
     }
@@ -684,66 +511,6 @@
         min-height: 0 !important;
         overflow-y: auto !important;
     }
-}
-
-.desktop-chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    background: var(--firefly-chat-surface-muted);
-}
-
-.desktop-connect-panel {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    flex-shrink: 0;
-}
-
-.desktop-status-lights {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-}
-
-.desktop-status-light {
-    width: 0.68rem;
-    height: 0.68rem;
-    border-radius: 999px;
-    background: #95a5b5;
-    box-shadow: 0 0 0 0.15rem rgba(149, 165, 181, 0.18);
-}
-
-.desktop-status-light.is-online {
-    background: #2f9e72;
-    box-shadow: 0 0 0 0.15rem rgba(47, 158, 114, 0.18);
-}
-
-.desktop-status-light.is-warning {
-    background: #d3922e;
-    box-shadow: 0 0 0 0.15rem rgba(211, 146, 46, 0.18);
-}
-
-.desktop-status-light.is-offline {
-    background: #c65353;
-    box-shadow: 0 0 0 0.15rem rgba(198, 83, 83, 0.18);
-}
-
-.desktop-status-light.is-idle {
-    background: #95a5b5;
-    box-shadow: 0 0 0 0.15rem rgba(149, 165, 181, 0.18);
-}
-
-#desktopConnectBtn.is-connected {
-    background: var(--firefly-chat-accent);
-    color: #ffffff;
-    border-color: var(--firefly-chat-accent);
-}
-
-#desktopProfileSubline:empty,
-#mobileProfileSubline:empty {
-    display: none;
 }
 
 #messagesContainer {
@@ -801,32 +568,6 @@
 
 .thread-card__delete {
     flex-shrink: 0;
-}
-
-.chat-tab-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-}
-
-.chat-tab-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.2rem;
-    padding: 0.08rem 0.38rem;
-    border-radius: 999px;
-    background: #c84d4d;
-    color: #ffffff;
-    font-size: 0.7rem;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.chat-tab-badge.chat-tab-badge--mobile {
-    min-width: 1.1rem;
-    padding: 0.06rem 0.34rem;
-    font-size: 0.64rem;
 }
 
 .node-list {
@@ -1080,17 +821,6 @@
     gap: 1rem;
 }
 
-.profile-manager__selector {
-    display: flex;
-    gap: 0.75rem;
-    align-items: end;
-}
-
-.profile-manager__selector-field {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
 .profile-manager__grid {
     display: grid;
     gap: 1rem;
@@ -1283,14 +1013,6 @@
         min-height: 0 !important;
     }
 
-    #chatTabs {
-        display: none !important;
-    }
-
-    #chatTabBar {
-        display: none !important;
-    }
-
     #messagesContainer {
         background: var(--firefly-chat-surface-muted);
         padding-bottom: 1rem !important;
@@ -1304,11 +1026,6 @@
 
     .profile-manager__grid {
         grid-template-columns: minmax(0, 1fr);
-    }
-
-    .profile-manager__selector {
-        flex-direction: column;
-        align-items: stretch;
     }
 
     .profile-manager {
@@ -1330,140 +1047,8 @@
         border-left-color: var(--firefly-chat-accent);
     }
 
-    .mobile-bottom-nav__text {
-        white-space: nowrap;
-    }
-
-    .mobile-bottom-nav__badge {
-        position: absolute;
-        top: -0.18rem;
-        right: -0.34rem;
-        min-width: 1rem;
-        padding: 0.05rem 0.24rem;
-        line-height: 1;
-        box-shadow: 0 0 0 2px var(--firefly-chat-surface-muted);
-        z-index: 1;
-    }
-
     #composerBar {
         padding-bottom: calc(4.75rem + env(safe-area-inset-bottom)) !important;
-    }
-
-    #mobileSettingsSheet {
-        --bs-offcanvas-height: min(72vh, 34rem);
-        border-radius: 1.5rem 1.5rem 0 0;
-        background: var(--firefly-chat-surface-muted);
-        backdrop-filter: blur(16px);
-    }
-
-    #mobileSettingsSheet .offcanvas-header {
-        border-bottom: 1px solid var(--firefly-chat-border);
-    }
-
-    #mobileSettingsSheet .card {
-        border-radius: 1rem;
-    }
-
-    #mobileSettingsSheet .profile-selector-status {
-        display: grid;
-        gap: 0.75rem;
-        padding: 0.9rem 1rem;
-        border-radius: 1rem;
-        border: 1px solid rgba(128, 160, 190, 0.18);
-        background: rgba(255, 255, 255, 0.04);
-        box-shadow: none;
-    }
-
-    #mobileSettingsSheet .profile-selector-status__row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        min-height: 2.1rem;
-    }
-
-    #mobileSettingsSheet .profile-selector-status__label {
-        color: var(--bs-secondary-color);
-        font-size: 0.98rem;
-        line-height: 1.1;
-    }
-
-    #mobileSettingsSheet .profile-selector-status__badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 8.6rem;
-        min-height: 2.1rem;
-        padding: 0.35rem 0.9rem;
-        font-size: 0.92rem;
-        line-height: 1;
-        font-weight: 700;
-        border-radius: 0.9rem;
-    }
-
-    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 3rem;
-        padding: 0.75rem 1rem;
-        border: 1px solid var(--firefly-chat-accent);
-        border-radius: 1rem;
-        color: #fff;
-        background: var(--firefly-chat-accent);
-        box-shadow: 0 8px 18px rgba(31, 93, 150, 0.2);
-        font-weight: 600;
-        letter-spacing: 0.01em;
-        text-align: center;
-    }
-
-    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link:hover,
-    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link:focus,
-    #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link:active {
-        color: #fff;
-        background: var(--firefly-chat-accent-strong);
-        border-color: var(--firefly-chat-accent-strong);
-    }
-
-    [data-bs-theme="dark"] #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link {
-        border-color: var(--firefly-chat-accent);
-        box-shadow: 0 14px 28px rgba(5, 12, 20, 0.42);
-    }
-
-    @media (min-width: 768px) {
-        #mobileSettingsSheet.profile-selector-sheet {
-            --bs-offcanvas-height: min(88vh, 44rem);
-            top: 0;
-            right: 0;
-            left: auto !important;
-            bottom: 0;
-            width: min(25rem, 92vw) !important;
-            height: 100% !important;
-            max-height: none !important;
-            border-top: none !important;
-            border-left: 1px solid var(--firefly-chat-border);
-            border-radius: 1.5rem 0 0 1.5rem !important;
-            background: var(--firefly-chat-surface-muted);
-            transform: translateX(100%);
-        }
-
-        #mobileSettingsSheet.profile-selector-sheet.show,
-        #mobileSettingsSheet.profile-selector-sheet.showing {
-            transform: none;
-        }
-
-        #mobileSettingsSheet.profile-selector-sheet .offcanvas-body {
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-        }
-
-        #mobileSettingsSheet.profile-selector-sheet .profile-selector-manage-link {
-            margin-top: auto;
-            position: sticky;
-            bottom: 0;
-            background: inherit;
-        }
     }
 
     #composerBar {
@@ -1604,11 +1189,11 @@
         padding: 0.2rem 0.4rem;
         font-size: 0.7rem;
     }
-    
+
     .d-md-none .form-select-sm {
         font-size: 0.775rem;
     }
-    
+
     .d-md-none .gap-2 {
         gap: 0.25rem !important;
     }
@@ -1649,8 +1234,6 @@ let dmMessages = [];
 let messageSnapshotRequestId = 0;
 let dmTargets = [];
 let replyingToPacketId = null;
-let currentSocketStatusClass = 'bg-secondary';
-let currentInterfaceStatusClass = 'bg-warning';
 let unreadChannelMessageCounts = new Map();
 let unreadDmMessageCounts = new Map();
 let managedProfiles = {{ profiles|tojson }};
@@ -1687,23 +1270,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         updateConnectionStatus('bg-danger', 'Socket error');
     }
 
-    document.getElementById('setProfileBtn').addEventListener('click', setProfile);
-    document.getElementById('profileSelect').addEventListener('change', handleProfileSelectionChange);
-    document.getElementById('mobileConnectBtn').addEventListener('click', handleMobileConnectClick);
-    document.getElementById('desktopConnectBtn').addEventListener('click', handleDesktopConnectClick);
     document.getElementById('sendBtn').addEventListener('click', sendMessage);
     document.getElementById('cancelReplyBtn').addEventListener('click', clearReplyComposer);
-    document.getElementById('channelTabBtn').addEventListener('click', openChannelInbox);
-    document.getElementById('dmTabBtn').addEventListener('click', openDmInbox);
-    document.getElementById('nodesTabBtn').addEventListener('click', openNodesInbox);
-    document.getElementById('mapTabBtn').addEventListener('click', openMapInbox);
-    document.getElementById('desktopProfilesTabBtn').addEventListener('click', openProfilesInbox);
-    document.getElementById('mobileChannelsBtn').addEventListener('click', openChannelInbox);
-    document.getElementById('mobileDmsBtn').addEventListener('click', openDmInbox);
-    document.getElementById('mobileNodesBtn').addEventListener('click', openNodesInbox);
-    document.getElementById('mobileMapBtn').addEventListener('click', openMapInbox);
-    document.getElementById('mobileProfilesBtn').addEventListener('click', openProfilesInbox);
-    document.getElementById('manageProfilesBtn').addEventListener('click', openProfilesInbox);
     document.getElementById('saveProfileBtn').addEventListener('click', updateManagedProfile);
     document.getElementById('addEditChannelBtn').addEventListener('click', () => addProfileChannelRow('editChannelsList'));
     document.getElementById('editChannelsList').addEventListener('click', handleEditChannelListClick);
@@ -1747,20 +1315,6 @@ function openProfileSelectorIfRequested() {
     const query = params.toString();
     const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
     window.history.replaceState({}, '', nextUrl);
-}
-
-function openProfileSelector() {
-    const sheet = document.getElementById('mobileSettingsSheet');
-    if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-        bootstrap.Offcanvas.getOrCreateInstance(sheet).show();
-    }
-}
-
-function closeProfileSelector() {
-    const sheet = document.getElementById('mobileSettingsSheet');
-    if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-        bootstrap.Offcanvas.getOrCreateInstance(sheet).hide();
-    }
 }
 
 function initializePendingChatContext() {
@@ -1847,26 +1401,9 @@ function getUnreadTotal(unreadMap) {
     return total;
 }
 
-function setUnreadBadge(elementId, count) {
-    const badge = document.getElementById(elementId);
-    if (!badge) return;
-
-    if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : String(count);
-        badge.classList.remove('d-none');
-    } else {
-        badge.textContent = '0';
-        badge.classList.add('d-none');
-    }
-}
-
 function updateNavigationBadges() {
     const unreadChannelCount = getUnreadTotal(unreadChannelMessageCounts);
     const unreadDmCount = getUnreadTotal(unreadDmMessageCounts);
-    setUnreadBadge('channelTabBadge', unreadChannelCount);
-    setUnreadBadge('dmTabBadge', unreadDmCount);
-    setUnreadBadge('mobileChannelsBadge', unreadChannelCount);
-    setUnreadBadge('mobileDmsBadge', unreadDmCount);
     updateAppIconBadge(unreadChannelCount + unreadDmCount);
 }
 
@@ -2246,8 +1783,6 @@ async function loadCurrentProfileAndStatus() {
         currentProfile = profile;
 
         if (profile) {
-            const mobileSelect = document.getElementById('profileSelect');
-            if (mobileSelect) mobileSelect.value = profile.id;
             activeChannelIndex = Number.isInteger(profile.selected_channel_index) ? profile.selected_channel_index : 0;
 
             currentChannelRoom = profile.channel_number ?? null;
@@ -2276,8 +1811,6 @@ async function loadCurrentProfileAndStatus() {
         }
 
         applyUnreadState(profile);
-        updateProfileBanner(profile);
-        syncProfileSelectors();
     } catch (error) {
         console.error('Error loading profile and status:', error);
         updateInterfaceStatus('bg-secondary', 'Unknown');
@@ -2286,48 +1819,24 @@ async function loadCurrentProfileAndStatus() {
 
 function updateConnectionStatus(status, statusText) {
     const mobileStatus = document.getElementById('connectionStatusMobile');
-    currentSocketStatusClass = status;
 
     if (mobileStatus) {
         mobileStatus.className = `badge ${status}`;
         mobileStatus.textContent = statusText;
     }
-    updateStatusLight('mobileSocketLight', status);
-    updateStatusLight('desktopSocketLight', status);
-    updateConnectButtons();
 }
 
 function updateInterfaceStatus(status, statusText) {
     const mobileStatus = document.getElementById('interfaceStatusMobile');
-    currentInterfaceStatusClass = status;
 
     if (mobileStatus) {
         mobileStatus.className = `badge ${status}`;
         mobileStatus.textContent = statusText;
     }
-    updateStatusLight('mobileInterfaceLight', status);
-    updateStatusLight('desktopInterfaceLight', status);
-    updateConnectButtons();
-}
-
-function updateProfileBanner(profile) {
-    const mobileProfileName = document.getElementById('mobileProfileName');
-    const desktopProfileName = document.getElementById('desktopProfileName');
-
-    if (profile) {
-        if (mobileProfileName) mobileProfileName.textContent = profile.long_name || 'Unknown Profile';
-        if (desktopProfileName) desktopProfileName.textContent = profile.long_name || 'Unknown Profile';
-    } else {
-        if (mobileProfileName) mobileProfileName.textContent = 'No Profile Selected';
-        if (desktopProfileName) desktopProfileName.textContent = 'No Profile Selected';
-    }
-    updateHeaderState();
-    updateConnectButtons();
 }
 
 function refreshProfileBanner() {
     if (currentProfile) {
-        updateProfileBanner(currentProfile);
     }
 }
 
@@ -2734,10 +2243,6 @@ async function openMapInbox() {
 
 async function openProfilesInbox() {
     await loadManagedProfiles();
-    const sheet = document.getElementById('mobileSettingsSheet');
-    if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-        bootstrap.Offcanvas.getOrCreateInstance(sheet).hide();
-    }
     setActiveChatTab('profiles');
 }
 
@@ -2760,16 +2265,6 @@ function setActiveChatTab(tab) {
         clearMap();
     }
     activeChatTab = nextTab;
-    document.getElementById('channelTabBtn').classList.toggle('active', activeChatTab === 'channel');
-    document.getElementById('dmTabBtn').classList.toggle('active', activeChatTab === 'dm');
-    document.getElementById('nodesTabBtn').classList.toggle('active', activeChatTab === 'nodes');
-    document.getElementById('mapTabBtn').classList.toggle('active', activeChatTab === 'map');
-    document.getElementById('desktopProfilesTabBtn').classList.toggle('active', activeChatTab === 'profiles');
-    document.getElementById('mobileChannelsBtn').classList.toggle('active', activeChatTab === 'channel');
-    document.getElementById('mobileDmsBtn').classList.toggle('active', activeChatTab === 'dm');
-    document.getElementById('mobileNodesBtn').classList.toggle('active', activeChatTab === 'nodes');
-    document.getElementById('mobileMapBtn').classList.toggle('active', activeChatTab === 'map');
-    document.getElementById('mobileProfilesBtn').classList.toggle('active', activeChatTab === 'profiles');
     updateComposerState();
     renderActiveMessages();
     if (enteringNodes) {
@@ -2897,7 +2392,6 @@ function updateComposerState() {
     if (activeChatTab === 'nodes' || activeChatTab === 'map' || activeChatTab === 'profiles') {
         if (composerBar) composerBar.classList.add('d-none');
         if (replyBar) replyBar.classList.add('d-none');
-        updateHeaderState();
         return;
     }
 
@@ -2923,8 +2417,6 @@ function updateComposerState() {
     } else if (replyBar) {
         replyBar.classList.add('d-none');
     }
-
-    updateHeaderState();
 }
 
 function updateCharacterCounter() {
@@ -3462,23 +2954,6 @@ async function loadManagedProfiles() {
         console.error('Error loading profiles:', error);
         managedProfiles = {};
     }
-    syncProfileSelectors();
-}
-
-function syncProfileSelectors() {
-    const options = ['<option value="">Select profile...</option>'];
-    Object.entries(managedProfiles).forEach(([profileId, profile]) => {
-        options.push(`<option value="${escapeHtml(profileId)}">${escapeHtml(profile.long_name || profileId)}</option>`);
-    });
-    const selectedValue = currentProfile?.id || '';
-
-    ['profileSelect'].forEach(selectId => {
-        const select = document.getElementById(selectId);
-        if (!select) return;
-        select.innerHTML = options.join('');
-        select.value = selectedValue;
-    });
-    updateProfileActivationButton();
 }
 
 function renderProfilesView(container) {
@@ -3557,8 +3032,6 @@ function renderProfilesView(container) {
             </details>
         </div>
     `;
-
-    syncProfileSelectors();
     document.getElementById('notificationsToggle')?.addEventListener('change', handleNotificationToggleChange);
     syncNotificationToggleUi();
     document.getElementById('createProfileForm')?.addEventListener('submit', createManagedProfile);
@@ -4325,22 +3798,6 @@ function upsertMessage(list, message) {
     }
 }
 
-function selectedProfileIsActive() {
-    const selected = document.getElementById('profileSelect')?.value;
-    return Boolean(currentProfile?.id && selected === String(currentProfile.id));
-}
-
-function updateProfileActivationButton() {
-    const button = document.getElementById('setProfileBtn');
-    if (!button || button.dataset.profileBusy === 'true') return;
-    button.disabled = !document.getElementById('profileSelect')?.value;
-    button.textContent = selectedProfileIsActive() ? 'Deactivate' : 'Activate';
-}
-
-async function handleProfileSelectionChange() {
-    updateProfileActivationButton();
-    if (!document.getElementById('profileSelect')?.value) await openProfilesInbox();
-}
 
 function showFirstProfileChannel() {
     pendingChannelIndex = null;
@@ -4352,33 +3809,18 @@ function showFirstProfileChannel() {
 }
 
 async function setProfile(event) {
-    const clickedButton = event ? event.target : null;
-    const isDesktopConnectButton = clickedButton && clickedButton.id === 'desktopConnectBtn';
-    const isMobileConnectButton = clickedButton && clickedButton.id === 'mobileConnectBtn';
-    const directProfileId = clickedButton?.dataset?.setProfileId || '';
-    const isConnectButton = isDesktopConnectButton || isMobileConnectButton;
-    const requestedSelectId = event && event.profileSelectId ? event.profileSelectId : 'profileSelect';
-    const selectedProfileId = document.getElementById(requestedSelectId)?.value || '';
-    const deactivate = (clickedButton?.id === 'setProfileBtn' && selectedProfileIsActive()) || Boolean(directProfileId && currentProfile?.id === directProfileId);
-    const profileId = deactivate ? '' : directProfileId || (isDesktopConnectButton
-        ? (currentProfile?.id || '')
-        : (isMobileConnectButton
-            ? (document.getElementById('profileSelect')?.value || currentProfile?.id || '')
-            : selectedProfileId));
-    const setBtn = isDesktopConnectButton
-        ? document.getElementById('desktopConnectBtn')
-        : (isMobileConnectButton ? document.getElementById('mobileConnectBtn') : (clickedButton || document.getElementById('setProfileBtn')));
-
-    if (!setBtn) return;
-    if (!profileId && !deactivate) {
-        updateProfileActivationButton();
+    const setBtn = event?.target;
+    const directProfileId = setBtn?.dataset?.setProfileId;
+    if (!setBtn || setBtn.disabled) return;
+    if (!directProfileId) {
         await openProfilesInbox();
         return;
     }
-
+    const deactivate = currentProfile?.id === directProfileId;
+    const profileId = deactivate ? '' : directProfileId;
     setBtn.dataset.profileBusy = 'true';
     setBtn.disabled = true;
-    setBtn.textContent = deactivate ? 'Deactivating…' : (isConnectButton ? 'Reconnecting...' : 'Activating…');
+    setBtn.textContent = deactivate ? 'Deactivating…' : 'Activating…';
 
     try {
         const response = await fetch('/api/current-profile', {
@@ -4410,12 +3852,9 @@ async function setProfile(event) {
                 joinProfileRoom(currentProfileRoom);
             }
         }
-
-        updateProfileBanner(currentProfile);
-        syncProfileSelectors();
         await loadDmTargets();
         await loadNodes();
-        if (currentProfile && !isConnectButton) showFirstProfileChannel();
+        if (currentProfile) showFirstProfileChannel();
         else await applyPendingChatContext();
 
         if (data.interface_status === 'started') {
@@ -4433,10 +3872,6 @@ async function setProfile(event) {
         }
 
         renderActiveMessages();
-
-        if (setBtn.id === 'setProfileBtn') {
-            closeProfileSelector();
-        }
 
         if (currentProfile && data.unread_count !== undefined) {
             if (data.unread_count > 0) {
@@ -4459,74 +3894,7 @@ async function setProfile(event) {
     } finally {
         delete setBtn.dataset.profileBusy;
         setBtn.disabled = false;
-        if (setBtn.id === 'setProfileBtn') {
-            if (deactivate && !currentProfile) document.getElementById('profileSelect').value = selectedProfileId;
-            updateProfileActivationButton();
-        } else if (directProfileId) {
-            setBtn.textContent = currentProfile?.id === directProfileId ? 'Deactivate' : 'Activate';
-        } else {
-            updateConnectButtons();
-        }
-    }
-}
-
-async function reconnectProfile(button) {
-    if (!button || !currentProfile) return;
-
-    button.disabled = true;
-    button.textContent = 'Reconnecting...';
-
-    try {
-        if (socket) {
-            try {
-                socket.disconnect();
-                socket.connect();
-            } catch (socketError) {
-                console.error('Error reconnecting socket:', socketError);
-            }
-        }
-
-        const response = await fetch('/api/reconnect-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name=csrf-token]').content },
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || `HTTP ${response.status}`);
-        }
-
-        currentProfile = data.profile || currentProfile;
-        channelMessages = data.channel_messages || channelMessages;
-        dmMessages = data.dm_messages || dmMessages;
-        if (Number.isInteger(data.selected_channel_index)) {
-            activeChannelIndex = data.selected_channel_index;
-        }
-        applyUnreadState(data);
-        syncProfileSelectors();
-        await loadDmTargets();
-        await loadNodes();
-
-        if (data.interface_status === 'started') {
-            updateInterfaceStatus('bg-success', 'Connected');
-        } else if (data.interface_status === 'conflict') {
-            updateInterfaceStatus('bg-warning', 'Profile Conflict');
-            if (data.warning) alert('Warning: ' + data.warning);
-        } else if (data.interface_status === 'failed') {
-            updateInterfaceStatus('bg-danger', 'Failed to Start');
-            if (data.warning) alert('Warning: ' + data.warning);
-        } else {
-            updateInterfaceStatus('bg-success', 'Connected');
-        }
-
-        renderActiveMessages();
-        updateComposerState();
-    } catch (error) {
-        console.error('Error reconnecting profile:', error);
-        updateInterfaceStatus('bg-danger', 'Failed to Start');
-        alert('Error reconnecting profile: ' + error.message);
-    } finally {
-        button.disabled = false;
-        updateConnectButtons();
+        setBtn.textContent = currentProfile?.id === directProfileId ? 'Deactivate' : 'Activate';
     }
 }
 
@@ -4776,77 +4144,7 @@ function clearReplyComposer() {
     updateComposerState();
 }
 
-function updateHeaderState() {
-    const mobileSubline = document.getElementById('mobileProfileSubline');
-    const desktopSubline = document.getElementById('desktopProfileSubline');
-    if (mobileSubline) mobileSubline.textContent = '';
-    if (desktopSubline) desktopSubline.textContent = '';
-}
 
-function updateStatusLight(elementId, status) {
-    const light = document.getElementById(elementId);
-    if (!light) return;
-    light.classList.remove('is-online', 'is-warning', 'is-offline', 'is-idle');
-
-    if (status === 'bg-success') {
-        light.classList.add('is-online');
-    } else if (status === 'bg-warning') {
-        light.classList.add('is-warning');
-    } else if (status === 'bg-danger') {
-        light.classList.add('is-offline');
-    } else {
-        light.classList.add('is-idle');
-    }
-}
-
-function updateConnectButton(buttonId, noProfileText) {
-    const btn = document.getElementById(buttonId);
-    if (!btn) return;
-
-    btn.classList.remove('is-connected');
-
-    if (!currentProfile) {
-        btn.textContent = noProfileText;
-        return;
-    }
-
-    if (currentInterfaceStatusClass === 'bg-success') {
-        btn.textContent = 'Reconnect';
-        btn.classList.add('is-connected');
-        return;
-    }
-
-    if (currentInterfaceStatusClass === 'bg-danger') {
-        btn.textContent = 'Reconnect';
-        return;
-    }
-
-    btn.textContent = 'Reconnect';
-}
-
-function updateConnectButtons() {
-    updateConnectButton('mobileConnectBtn', 'Select');
-    updateConnectButton('desktopConnectBtn', 'Select');
-}
-
-function handleMobileConnectClick() {
-    if (!currentProfile && !(document.getElementById('profileSelect')?.value)) {
-        const sheet = document.getElementById('mobileSettingsSheet');
-        if (sheet && typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-            bootstrap.Offcanvas.getOrCreateInstance(sheet).show();
-        }
-        return;
-    }
-    reconnectProfile(document.getElementById('mobileConnectBtn'));
-}
-
-function handleDesktopConnectClick() {
-    if (!currentProfile) {
-        openProfileSelector();
-        return;
-    }
-    reconnectProfile(document.getElementById('desktopConnectBtn'));
-}
 
 function getPeerLabel(message, peerNodeNum) {
     const node = getNodeByNum(peerNodeNum);
@@ -5105,26 +4403,6 @@ function formatDateTime(dateTimeStr) {
     }
 }
 
-function showNodeNotification(message, type = 'info') {
-    // Create a temporary notification element
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close notification"></button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 5000);
-}
-
 function showNotification(message, type = 'info', duration = 4000) {
     console.log('[NOTIFICATION] showNotification called:', { message, type, duration });
     // Create a temporary notification element
@@ -5135,10 +4413,10 @@ function showNotification(message, type = 'info', duration = 4000) {
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close notification"></button>
     `;
-    
+
     document.body.appendChild(notification);
     console.log('[NOTIFICATION] Toast notification displayed');
-    
+
     // Auto-remove after specified duration
     setTimeout(() => {
         if (notification.parentNode) {
@@ -5238,5 +4516,5 @@ function restoreMarkdownTokens(html, tokenStore, prefix) {
 <script src="{{ url_for('static', filename='js/node-panels.js') }}"></script>
 <script src="{{ url_for('static', filename='js/board-unread.js') }}"></script>
 <script src="{{ url_for('static', filename='js/board.js') }}"></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/board.css') }}">
+
 {% endblock %}

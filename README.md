@@ -171,3 +171,5 @@ Tests cover identity migration, channel routing, receive handling, message snaps
 ## License
 
 MeshThreads is a Firefly derivative and retains the original [GPLv3 license](LICENSE). Nunito Sans is distributed under its [OFL license](static/fonts/OFL-NunitoSans.txt).
+
+[Meshtastic®](https://meshtastic.org/) is a registered trademark of Meshtastic LLC. Meshtastic software components are released under various licenses, see [GitHub](https://github.com/meshtastic) for details. No warranty is provided - use at your own risk.

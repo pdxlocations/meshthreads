@@ -7,7 +7,6 @@ from runtime_files import database_connection
 import json
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
-import os
 from firefly_logging import configure_logging, get_logger, make_log_print
 
 
@@ -285,70 +284,6 @@ class Database(Administration):
         generated_display = cls._generated_meshtastic_display(sender_num)
         return bool(generated_display and normalized_display_lower == generated_display.lower())
 
-    def migrate_profiles_from_json(self, json_file: str = "profiles.json"):
-        """Migrate existing profiles from JSON file to database (only if not already migrated)"""
-        if not os.path.exists(json_file):
-            return False  # No JSON file to migrate
-            
-        try:
-            # Check if we already have profiles in the database
-            with database_connection(self.db_path) as conn:
-                cursor = conn.execute("SELECT COUNT(*) FROM profiles")
-                existing_count = cursor.fetchone()[0]
-                
-                if existing_count > 0:
-                    print(f"Database already has {existing_count} profiles, skipping JSON migration")
-                    return False
-            
-            # Load and migrate JSON profiles
-            with open(json_file, 'r') as f:
-                profiles_data = json.load(f)
-                
-            if not profiles_data:
-                print("No profiles found in JSON file")
-                return False
-                
-            with database_connection(self.db_path) as conn:
-                migrated_count = 0
-                for profile_id, profile in profiles_data.items():
-                    channels = self._normalize_channels(
-                        profile.get("channels"),
-                        profile.get("channel", ""),
-                        profile.get("key", ""),
-                    )
-                    primary_channel = channels[0]["name"] if channels else profile.get("channel", "")
-                    primary_key = channels[0]["key"] if channels else profile.get("key", "")
-                    conn.execute("""
-                        INSERT OR IGNORE INTO profiles 
-                        (id, node_id, long_name, short_name, channel, key, channels_json, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        profile_id,
-                        profile.get('node_id', ''),
-                        profile.get('long_name', ''),
-                        profile.get('short_name', ''),
-                        primary_channel,
-                        primary_key,
-                        json.dumps(channels),
-                        profile.get('created_at', datetime.now().isoformat()),
-                        profile.get('updated_at', datetime.now().isoformat())
-                    ))
-                    migrated_count += 1
-                conn.commit()
-                
-                print(f"Successfully migrated {migrated_count} profiles from {json_file}")
-                
-                # Only backup the JSON file after successful migration
-                backup_file = f"{json_file}.migrated"
-                if not os.path.exists(backup_file):
-                    os.rename(json_file, backup_file)
-                    print(f"JSON profiles backed up as {backup_file}")
-                    
-                return True
-                
-        except Exception as e:
-            print(f"Error migrating profiles: {e}")
-            return False
 
     def create_user(self, user_id: str, username: str, password_hash: str) -> bool:
         try:

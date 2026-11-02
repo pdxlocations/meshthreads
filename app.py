@@ -321,13 +321,6 @@ def _selected_channel_index(profile=None):
     return min(_get_session_channel_index(), len(channels) - 1)
 
 
-def _selected_channel(profile=None):
-    channels = _profile_channels(profile or _get_session_profile())
-    if not channels:
-        return None
-    return channels[_selected_channel_index(profile)]
-
-
 def _effective_profile(profile=None, channel_index=None):
     profile = profile or _get_session_profile()
     if not profile:
@@ -442,17 +435,6 @@ def _node_id_from_num(node_num):
     return f"!{int(node_num):08x}"
 
 
-def _is_direct_message(packet, profile=None):
-    packet_to = getattr(packet, "to", None)
-    if packet_to in (None, 0, BROADCAST_NODE_NUM):
-        return False
-    profile = profile or udp_server.get_active_profile()
-    my_num = _profile_node_num(profile) if profile else None
-    if my_num is None:
-        return True
-    return int(packet_to) == int(my_num)
-
-
 def _already_seen(key):
     """Atomically suppress retransmissions while keeping a bounded history."""
     with _DEDUP_LOCK:
@@ -534,7 +516,6 @@ def _emit_node_update(profile_id, node):
 
 shared_packet_receiver = SharedPacketReceiver(MCAST_GRP, MCAST_PORT)
 virtual_node_manager = VirtualNodeManager(MCAST_GRP, MCAST_PORT, shared_receiver=shared_packet_receiver)
-
 
 
 def _get_mesh_store(profile=None):

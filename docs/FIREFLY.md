@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="static/images/firefly-logo-dark.png" alt="Firefly Logo Dark" width="30%">
-</p>
+> Archived documentation for [Firefly](https://github.com/pdxlocations/firefly), the upstream project. See the [MeshThreads README](../README.md) for the current interface and setup.
 
 # Firefly
 
@@ -274,8 +272,8 @@ firefly/
     ├── css/
     │   └── style.css  # Custom styles
     └── images/
-        ├── firefly-logo-dark.png   # Logo for dark theme
-        └── firefly-logo-light.png  # Logo for light theme
+        ├── meshthreads-mark-dark.svg   # Header mark for dark theme
+        └── meshthreads-mark-light.svg  # Header mark for light theme
 ```
 
 ## Docker Management

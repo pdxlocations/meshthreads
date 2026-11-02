@@ -1,7 +1,7 @@
 # Use Python 3.11 slim image as base
 FROM python:3.11-slim-bookworm
 
-LABEL org.opencontainers.image.source="https://github.com/pdxlocations/firefly"
+LABEL org.opencontainers.image.source="https://github.com/pdxlocations/meshthreads"
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -50,5 +50,5 @@ EXPOSE 4403/udp
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5069/ || exit 1
 
-# Default command runs the Firefly application
+# Default command runs the MeshThreads application
 CMD ["python3", "start.py"]

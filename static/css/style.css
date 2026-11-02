@@ -1,4 +1,4 @@
-/* Custom styles for MUDP Chat App */
+/* Shared MeshThreads component styles; Harbor overrides live in board.css. */
 
 body {
     background-color: #f8f9fa;
@@ -58,14 +58,6 @@ body {
     font-size: 0.875rem;
 }
 
-.btn-group-vertical .btn {
-    margin-bottom: 0.25rem;
-}
-
-.btn-group-vertical .btn:last-child {
-    margin-bottom: 0;
-}
-
 /* Scrollbar styling for message container */
 #messagesContainer::-webkit-scrollbar {
     width: 8px;
@@ -94,23 +86,6 @@ body {
     #messagesContainer {
         height: 300px;
     }
-}
-
-/* Loading animation */
-.loading {
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #007bff;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    animation: spin 1s linear infinite;
-    display: inline-block;
-    margin-right: 0.5rem;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
 
 /* Status badges */
