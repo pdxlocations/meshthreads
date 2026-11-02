@@ -686,7 +686,7 @@ body[data-bs-theme="dark"] .navbar-brand #logo-dark { display: block !important;
 }
 /* Dense phone conversations: put Reply in the byline instead of a separate row. */
 @media (max-width: 600px) {
-  .mesh-layout { padding: 3px 4px 4px; gap: 3px; }
+  .mesh-layout { padding: 3px 4px 9px; gap: 3px; }
   #mobileNavToggle { min-height: 30px; padding: 3px 7px; font-size: 11px; }
   #mobileNavToggle > span[aria-hidden="true"] { display: inline-flex; align-items: center; justify-content: center; width: 22px; flex: 0 0 22px; font-size: 21px; line-height: 1; }
   .board-heading { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 6px; padding: 8px; }
@@ -891,46 +891,4 @@ button.message-reaction:hover, button.message-reaction-unread { border-color: va
 @media (max-width: 600px) {
   .board-post .message-reactions { gap: 3px; margin-top: 1px; }
   .board-post button.message-reaction { min-height: 28px; min-width: 32px; padding: 1px 6px !important; }
-}
-
-/* Keep content inside iPhone notches, browser edge fades, and rounded corners. */
-:root {
-  --mesh-safe-top: env(safe-area-inset-top, 0px);
-  --mesh-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --mesh-safe-left: env(safe-area-inset-left, 0px);
-  --mesh-safe-right: env(safe-area-inset-right, 0px);
-  --mesh-header-base: 62px;
-  --mesh-safe-header-height: calc(var(--mesh-header-base) + var(--mesh-safe-top) + 6px);
-}
-@media (max-width: 600px) {
-  :root { --mesh-header-base: 52px; }
-}
-@media (max-width: 600px), (max-width: 950px) and (pointer: coarse) {
-  body[data-bs-theme] > .navbar {
-    box-sizing: border-box;
-    height: var(--mesh-safe-header-height) !important;
-    min-height: var(--mesh-safe-header-height) !important;
-    padding: calc(var(--mesh-safe-top) + 6px) max(12px, var(--mesh-safe-right)) 0 max(12px, var(--mesh-safe-left)) !important;
-  }
-  body.mobile-fixed-nav-page { height: 100dvh; min-height: 0; overflow: hidden; }
-  body.mobile-fixed-nav-page > .container.mt-4 {
-    box-sizing: border-box;
-    height: calc(100dvh - var(--mesh-safe-header-height)) !important;
-    padding: 0 max(4px, var(--mesh-safe-right)) max(12px, var(--mesh-safe-bottom)) max(4px, var(--mesh-safe-left)) !important;
-  }
-  body:not(.mobile-fixed-nav-page) > .container.mt-4 {
-    padding-left: max(12px, var(--mesh-safe-left));
-    padding-right: max(12px, var(--mesh-safe-right));
-    padding-bottom: max(12px, var(--mesh-safe-bottom));
-  }
-  .mesh-layout.mobile-nav-open > .mesh-rooms {
-    top: var(--mesh-safe-header-height);
-    bottom: max(12px, var(--mesh-safe-bottom));
-    left: var(--mesh-safe-left);
-    max-height: calc(100dvh - var(--mesh-safe-header-height) - max(12px, var(--mesh-safe-bottom)));
-  }
-  .mobile-nav-backdrop:not([hidden]) {
-    inset: var(--mesh-safe-header-height) 0 0;
-    height: auto;
-  }
 }

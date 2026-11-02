@@ -1,4 +1,4 @@
-const STATIC_CACHE = "meshthreads-static-v44";
+const STATIC_CACHE = "meshthreads-static-v45";
 const STATIC_ASSETS = [
   "/static/manifest.json",
   "/static/images/meshthreads.svg",
