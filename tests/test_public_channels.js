@@ -40,3 +40,24 @@ test('late results do not update a replacement form after navigating away',async
     await f.c.detectPublicChannels({currentTarget:f.button});
     assert.equal(f.rendered,undefined);
 });
+test('edit detection updates the edit list and preserves existing channel indices',async()=>{
+    const f=fixture([{name:'Local',key:'AQ==',profile_index:2}],[{name:'Local',key:'AQ=='},{name:'Another',key:'Ag=='}]);
+    f.button.dataset={channelList:'editChannelsList',channelStatus:'editPublicChannelsStatus'};
+    f.list.dataset={editorRevision:'1'};
+    f.c.document.getElementById=id=>id==='editChannelsList'?f.list:id==='editPublicChannelsStatus'?f.status:null;
+    f.c.collectProfileChannels=(id)=>{assert.equal(id,'editChannelsList');return [{name:'Local',key:'AQ==',profile_index:2}];};
+    let target;
+    f.c.renderProfileChannelRows=(id,rows)=>{target=id;assert.equal(rows[0].profile_index,2);assert.equal(rows.length,2);};
+    await f.c.detectPublicChannels({currentTarget:f.button});
+    assert.equal(target,'editChannelsList');
+    assert.match(f.status.textContent,/before saving/);
+});
+test('late detection is discarded when the edit modal opens another profile',async()=>{
+    const f=fixture();
+    f.button.dataset={channelList:'editChannelsList',channelStatus:'editPublicChannelsStatus'};
+    f.list.dataset={editorRevision:'1'};
+    f.c.document.getElementById=id=>id==='editChannelsList'?f.list:f.status;
+    f.c.fetch=async()=>{f.list.dataset.editorRevision='2';return {ok:true,json:async()=>({channels:[{name:'Local',key:'AQ=='}]})};};
+    await f.c.detectPublicChannels({currentTarget:f.button});
+    assert.equal(f.rendered,undefined);
+});

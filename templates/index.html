@@ -93,10 +93,14 @@
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label class="form-label mb-0">Channels *</label>
-                            <button class="btn btn-sm btn-outline-secondary" id="addEditChannelBtn" type="button">Add Channel</button>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-sm btn-outline-secondary" id="detectEditPublicChannelsBtn" type="button" data-channel-list="editChannelsList" data-channel-status="editPublicChannelsStatus">Detect 1-byte key channels</button>
+                                <button class="btn btn-sm btn-outline-secondary" id="addEditChannelBtn" type="button">Add Channel</button>
+                            </div>
                         </div>
                         <div id="editChannelsList" class="channel-editor-list"></div>
-                        <div class="form-text">Each channel needs a name and key.</div>
+                        <div class="form-text">Each channel needs a name and key. Detect public channels already configured in this install’s shared database.</div>
+                        <div id="editPublicChannelsStatus" class="form-text" role="status" aria-live="polite"></div>
                     </div>
                     <div class="mb-3">
                         <label for="editHopLimit" class="form-label">Hop Limit</label>
@@ -1273,6 +1277,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('sendBtn').addEventListener('click', sendMessage);
     document.getElementById('cancelReplyBtn').addEventListener('click', clearReplyComposer);
     document.getElementById('saveProfileBtn').addEventListener('click', updateManagedProfile);
+    document.getElementById('detectEditPublicChannelsBtn').addEventListener('click', detectPublicChannels);
     document.getElementById('addEditChannelBtn').addEventListener('click', () => addProfileChannelRow('editChannelsList'));
     document.getElementById('editChannelsList').addEventListener('click', handleEditChannelListClick);
 
@@ -3079,8 +3084,10 @@ function renderProfilesView(container) {
 
 async function detectPublicChannels(event) {
     const button = event.currentTarget;
-    const status = document.getElementById('publicChannelsStatus');
-    const list = document.getElementById('newChannelsList');
+    const listId = button.dataset?.channelList || 'newChannelsList';
+    const status = document.getElementById(button.dataset?.channelStatus || 'publicChannelsStatus');
+    const list = document.getElementById(listId);
+    const revision = list?.dataset?.editorRevision;
     if (button.disabled || !list || !status) return;
     button.disabled = true;
     status.textContent = 'Looking for public channels…';
@@ -3089,9 +3096,9 @@ async function detectPublicChannels(event) {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Could not detect public channels.');
         // Ignore a response if the user has navigated away or created a profile.
-        if (document.getElementById('newChannelsList') !== list) return;
+        if (document.getElementById(listId) !== list || list.dataset?.editorRevision !== revision) return;
         // Read at response time so edits made during detection are retained.
-        const channels = collectProfileChannels('newChannelsList', false);
+        const channels = collectProfileChannels(listId, false);
         const existing = new Set(channels.map(channel => JSON.stringify([channel.name, channel.key])));
         let added = 0;
         for (const channel of data.channels || []) {
@@ -3102,12 +3109,13 @@ async function detectPublicChannels(event) {
                 added++;
             }
         }
-        if (added) renderProfileChannelRows('newChannelsList', channels);
+        if (added) renderProfileChannelRows(listId, channels);
         status.textContent = added
-            ? `Added ${added} public ${added === 1 ? 'channel' : 'channels'}. Review them before creating your profile.`
+            ? `Added ${added} public ${added === 1 ? 'channel' : 'channels'}. Review them before saving your profile.`
             : data.channels?.length ? 'All detected public channels are already listed.'
                 : 'No 1-byte key channels found in the shared database yet. Add a channel manually or join by URL after activation.';
     } catch (error) {
+        if (document.getElementById(listId) !== list || list.dataset?.editorRevision !== revision) return;
         status.textContent = error.message || 'Could not detect public channels. Try again.';
     } finally {
         button.disabled = false;
@@ -3316,6 +3324,9 @@ function openEditProfileModal(profileId) {
         return;
     }
 
+    const channelList = document.getElementById('editChannelsList');
+    channelList.dataset.editorRevision = String(Number(channelList.dataset.editorRevision || 0) + 1);
+    document.getElementById('editPublicChannelsStatus').textContent = '';
     document.getElementById('editProfileId').value = profileId;
     document.getElementById('editNodeId').value = profile.node_id || '';
     document.getElementById('editLongName').value = profile.long_name || '';
