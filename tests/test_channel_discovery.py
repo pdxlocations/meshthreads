@@ -36,6 +36,26 @@ class ChannelDiscoveryTests(unittest.TestCase):
         self.db.record_public_channel_receipts(channels,int(getattr(packet,'from')),packet.id)
         return channels
 
+    def test_meshoregon_and_local_one_byte_keys_both_qualify_independently(self):
+        local = {'name':'Local','key':'BQ=='}
+        self.db.update_profile('p','u','!0000002a','Local','LOC',[self.channel,local])
+        self.profiles = self.db.get_all_profiles()
+        self.receive(self.packet())
+        self.assertNotIn(public_channel_fingerprint(local), self.db.get_verified_public_channel_fingerprints())
+        packet = mesh_pb2.MeshPacket(id=124,to=0xffffffff)
+        setattr(packet,'from',8)
+        data = mesh_pb2.Data(portnum=portnums_pb2.PortNum.TEXT_MESSAGE_APP,payload=b'External Local traffic')
+        packet.encrypted = encrypt_packet(local['name'],local['key'],packet,data)
+        self.assertEqual(packet.channel,75)
+        self.assertEqual(self.receive(packet),[local])
+        self.assertEqual(self.db.get_verified_public_channel_fingerprints(),
+                         {public_channel_fingerprint(self.channel),public_channel_fingerprint(local)})
+        app = Flask(__name__)
+        manager = Mock();manager.get_all_profiles.side_effect = self.db.get_all_profiles
+        register_room_routes({'app':app,'login_required':lambda f:f,'profile_manager':manager,'db':self.db})
+        self.assertEqual(app.test_client().get('/api/rooms/public-channels').json,
+                         {'channels':[local,self.channel]})
+
     def test_only_exact_key_that_decoded_packet_is_verified_despite_hash_collision(self):
         packet=self.packet()
         self.assertEqual(generate_hash(self.wrong['name'],self.wrong['key']),packet.channel)

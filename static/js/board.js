@@ -1,5 +1,7 @@
 /* MeshThreads presentation layer. Firefly remains responsible for transport and state. */
 const collapsedMeshThreads = new Set();
+const boardViewScrollPositions = new Map();
+let renderedBoardScrollKey = null;
 let nodeBoardQuery = '';
 let boardDialogBusy = false;
 let favoriteNodeNums = new Set();
@@ -345,8 +347,36 @@ function renderReplyBranch(node, group) {
     return `<div class="reply-branch" data-reply-packet="${Number(node.message.packet_id) || ''}">${renderBoardPost(node.message, node.reactions)}${footer}<div class="thread-replies ${open ? '' : 'd-none'}">${node.children.map(child => renderReplyBranch(child, group)).join('')}<div class="inline-composer-slot"></div></div></div>`;
 }
 
+function boardScrollKey() {
+    const channel = activeChatTab === 'channel' ? getActiveChannel() : null;
+    return JSON.stringify([currentProfile?.id || null, activeChatTab,
+        channel ? [channel.name, channel.channel_number ?? activeChannelIndex] : null,
+        activeChatTab === 'dm' ? activeDmTargetNodeNum : null]);
+}
+
+function withBoardScrollPosition(render) {
+    const container = document.getElementById('messagesContainer');
+    if (!container) return render();
+    // The tab/room variables may already have changed. Track the view actually
+    // rendered in this shared scroller so its position is saved under its own key.
+    if (renderedBoardScrollKey !== null) {
+        boardViewScrollPositions.set(renderedBoardScrollKey, container.scrollTop);
+    }
+    const nextKey = boardScrollKey();
+    const saved = boardViewScrollPositions.get(nextKey);
+    try {
+        return render();
+    } finally {
+        // New chronological DM conversations start at the latest message;
+        // all other new views start at the top. Returning views keep their place.
+        container.scrollTop = saved ?? (activeChatTab === 'dm' && activeDmTargetNodeNum ? container.scrollHeight : 0);
+        renderedBoardScrollKey = nextKey;
+        updateNodesBackToTopVisibility(container);
+    }
+}
+
 renderActiveMessages = function () {
-    return preserveComposerFocus(() => {
+    return withBoardScrollPosition(() => preserveComposerFocus(() => {
         const container = document.getElementById('messagesContainer');
         const dock = document.getElementById('composerDock');
         if (!dock) return originalBoardRender();
@@ -381,7 +411,7 @@ renderActiveMessages = function () {
         }
         container.scrollTop = scroll;
         BoardUnread.observe(container);
-    });
+    }));
 };
 
 updateComposerState = function () {

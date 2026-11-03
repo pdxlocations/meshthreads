@@ -2274,7 +2274,6 @@ function openChannelInbox() {
 
 function setActiveChatTab(tab) {
     const nextTab = ['dm', 'nodes', 'map', 'profiles'].includes(tab) ? tab : 'channel';
-    const enteringNodes = nextTab === 'nodes' && activeChatTab !== 'nodes';
     if (activeChatTab !== nextTab) {
         replyingToPacketId = null;
     }
@@ -2284,11 +2283,6 @@ function setActiveChatTab(tab) {
     activeChatTab = nextTab;
     updateComposerState();
     renderActiveMessages();
-    if (enteringNodes) {
-        const container = document.getElementById('messagesContainer');
-        if (container) container.scrollTop = 0;
-        updateNodesBackToTopVisibility(container);
-    }
     updateChatUrl();
 }
 
