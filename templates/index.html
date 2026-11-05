@@ -1253,6 +1253,10 @@ let unreadDmMessageCounts = new Map();
 let managedProfiles = {{ profiles|tojson }};
 let mapInstance = null;
 let mapLayerGroup = null;
+let mapOwnerProfileId = null;
+let mapRenderRevision = 0;
+const mapViewports = new Map();
+const mapNodeMarkers = new Map();
 let pendingThreadStateRefresh = null;
 let activeTracerouteRequest = null;
 let channelSelectionRequestId = 0;
@@ -3510,16 +3514,20 @@ async function deleteManagedProfile(profileId) {
 
 function renderMapView(container) {
     if (!currentProfile) {
+        clearMap();
         container.innerHTML = '<div class="alert alert-warning mb-0"><h5>No Profile Selected</h5><p class="mb-0">Use Profiles to choose a profile before viewing node positions.</p></div>';
         return;
     }
 
-    container.innerHTML = `
-        <div class="map-panel">
-            <div id="nodeMapStatus" class="alert alert-secondary mb-0 d-none" role="status"></div>
-            <div id="nodeMap" class="node-map" aria-label="Map of known node positions"></div>
-        </div>
-    `;
+    if (!container.querySelector('#nodeMap') || (mapInstance && mapOwnerProfileId !== currentProfile.id)) {
+        clearMap();
+        container.innerHTML = `
+            <div class="map-panel">
+                <div id="nodeMapStatus" class="alert alert-secondary mb-0 d-none" role="status"></div>
+                <div id="nodeMap" class="node-map" aria-label="Map of known node positions"></div>
+            </div>
+        `;
+    }
 
     const positionedNodes = meshNodes.filter(hasRenderableLocation);
     const mapStatus = document.getElementById('nodeMapStatus');
@@ -3527,71 +3535,113 @@ function renderMapView(container) {
         mapStatus.className = 'alert alert-info mb-0';
         mapStatus.textContent = 'Node markers will appear here after this profile hears position packets.';
         mapStatus.classList.remove('d-none');
-        clearMap();
-        return;
-    }
+    } else mapStatus.classList.add('d-none');
 
-    mapStatus.classList.add('d-none');
-    window.requestAnimationFrame(() => renderMap(positionedNodes));
+    const revision = ++mapRenderRevision;
+    const profileId = currentProfile.id;
+    // A queued update must not recreate a map after navigation or a profile change.
+    window.requestAnimationFrame(() => {
+        if (revision !== mapRenderRevision || activeChatTab !== 'map' || currentProfile?.id !== profileId) return;
+        if (positionedNodes.length || mapInstance) renderMap(positionedNodes);
+    });
+}
+
+function rememberMapViewport(layerName) {
+    if (!mapInstance || !mapOwnerProfileId) return;
+    const center = mapInstance.getCenter();
+    mapViewports.set(mapOwnerProfileId, {
+        center: [center.lat, center.lng],
+        zoom: mapInstance.getZoom(),
+        layerName: layerName || mapViewports.get(mapOwnerProfileId)?.layerName || 'OpenStreetMap',
+    });
 }
 
 function clearMap() {
-    if (mapLayerGroup) {
-        mapLayerGroup.clearLayers();
-    }
+    mapRenderRevision++;
     if (mapInstance) {
+        rememberMapViewport();
         mapInstance.remove();
-        mapInstance = null;
-        mapLayerGroup = null;
     }
+    mapInstance = null;
+    mapLayerGroup = null;
+    mapOwnerProfileId = null;
+    mapNodeMarkers.clear();
 }
 
 function renderMap(nodes) {
     const mapElement = document.getElementById('nodeMap');
     if (!mapElement || typeof L === 'undefined') return;
 
-    clearMap();
-    mapInstance = L.map(mapElement, {
-        zoomControl: true,
-        attributionControl: true,
-    });
+    const creating = !mapInstance || mapInstance.getContainer() !== mapElement || mapOwnerProfileId !== currentProfile?.id;
+    if (creating) {
+        clearMap();
+        mapOwnerProfileId = currentProfile.id;
+        mapInstance = L.map(mapElement, {zoomControl: true, attributionControl: true});
+        const baseLayers = buildMapBaseLayers();
+        const saved = mapViewports.get(mapOwnerProfileId);
+        (baseLayers[saved?.layerName] || baseLayers['OpenStreetMap']).addTo(mapInstance);
+        L.control.layers(baseLayers, null, {position: 'topright', collapsed: true}).addTo(mapInstance);
+        mapLayerGroup = L.layerGroup().addTo(mapInstance);
+        mapInstance.on('moveend', () => rememberMapViewport());
+        mapInstance.on('baselayerchange', event => rememberMapViewport(event.name));
+    }
 
-    const baseLayers = buildMapBaseLayers();
-    const defaultLayer = baseLayers['OpenStreetMap'];
-    defaultLayer.addTo(mapInstance);
-    L.control.layers(baseLayers, null, { position: 'topright', collapsed: true }).addTo(mapInstance);
-
-    mapLayerGroup = L.layerGroup().addTo(mapInstance);
     const bounds = [];
-
+    const present = new Set();
     nodes.forEach(node => {
         const lat = Number(node.latitude);
         const lng = Number(node.longitude);
+        const key = String(node.node_num ?? node.node_id);
+        present.add(key);
         const shortName = (node.short_name || '?').trim() || '?';
         const label = escapeHtml(shortName.slice(0, 4));
-        const markerColors = getNodeMarkerColors(node);
-        const marker = L.marker([lat, lng], {
-            icon: L.divIcon({
-                className: 'map-node-icon',
-                html: `<span class="map-node-badge" style="--node-color: ${markerColors.background}; --node-text-color: ${markerColors.foreground};">${label}</span>`,
-                iconSize: [44, 44],
-                iconAnchor: [22, 22],
-            }),
-            title: node.long_name || node.node_id || shortName,
+        const colors = getNodeMarkerColors(node);
+        const title = node.long_name || node.node_id || shortName;
+        const signature = JSON.stringify([label, colors, title]);
+        const icon = () => L.divIcon({
+            className: 'map-node-icon',
+            html: `<span class="map-node-badge" style="--node-color: ${colors.background}; --node-text-color: ${colors.foreground};">${label}</span>`,
+            iconSize: [44, 44], iconAnchor: [22, 22],
         });
-
-        marker.bindPopup(() => createNodeMapPopup(node));
-        marker.addTo(mapLayerGroup);
+        let entry = mapNodeMarkers.get(key);
+        if (!entry) {
+            entry = {node, signature, lat, lng, marker: L.marker([lat, lng], {icon: icon(), title})};
+            entry.marker.bindPopup(() => createNodeMapPopup(entry.node));
+            entry.marker.addTo(mapLayerGroup);
+            mapNodeMarkers.set(key, entry);
+        } else {
+            const popupChanged = entry.node.long_name !== node.long_name || entry.node.node_id !== node.node_id || entry.node.position_timestamp !== node.position_timestamp;
+            entry.node = node;
+            if (entry.lat !== lat || entry.lng !== lng) entry.marker.setLatLng([lat, lng]);
+            if (entry.signature !== signature) {
+                entry.marker.options.title = title;
+                entry.marker.setIcon(icon());
+                entry.signature = signature;
+            }
+            if (popupChanged && entry.marker.isPopupOpen()) entry.marker.setPopupContent(() => createNodeMapPopup(entry.node));
+            entry.lat = lat; entry.lng = lng;
+        }
         bounds.push([lat, lng]);
     });
-
-    if (bounds.length === 1) {
-        mapInstance.setView(bounds[0], 13);
-    } else {
-        mapInstance.fitBounds(bounds, { padding: [24, 24] });
+    for (const [key, entry] of mapNodeMarkers) {
+        if (!present.has(key)) {
+            mapLayerGroup.removeLayer(entry.marker);
+            mapNodeMarkers.delete(key);
+        }
     }
 
-    window.requestAnimationFrame(() => mapInstance?.invalidateSize());
+    // Fit all nodes only on the first visit. Live packets never change the view.
+    if (creating) {
+        const saved = mapViewports.get(mapOwnerProfileId);
+        if (saved) mapInstance.setView(saved.center, saved.zoom, {animate: false});
+        else if (bounds.length === 1) mapInstance.setView(bounds[0], 13);
+        else if (bounds.length) mapInstance.fitBounds(bounds, {padding: [24, 24]});
+        rememberMapViewport();
+    }
+    const renderedMap = mapInstance;
+    window.requestAnimationFrame(() => {
+        if (mapInstance === renderedMap) renderedMap.invalidateSize({pan: false});
+    });
 }
 
 function createNodeMapPopup(node) {
