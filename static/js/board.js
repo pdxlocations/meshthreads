@@ -102,10 +102,22 @@ function boardIcon(name) {
 }
 
 function boardAvatarColor(identity) {
-    const colors = ['#568ec4', '#4d9975', '#4d8c91', '#8b70ae'];
-    let hash = 0;
-    for (const char of String(identity || '')) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-    return colors[hash % colors.length];
+    const hex = typeof identity === 'number' && Number.isInteger(identity) && identity > 0 && identity < 0xffffffff
+        ? identity.toString(16).padStart(8, '0') : String(identity || '').replace(/^!/, '');
+    return /^[0-9a-f]{8}$/i.test(hex) ? '#' + hex.slice(-6).toLowerCase() : '#568ec4';
+}
+
+function renderIdentityAvatar(shortName, nodeId, nodeNum) {
+    const numericId = Number(nodeNum ?? nodeId);
+    const id = /^!?[0-9a-f]{8}$/i.test(String(nodeId || ''))
+        ? String(nodeId).replace(/^!/, '').toLowerCase()
+        : Number.isInteger(numericId) && numericId > 0 && numericId < 0xffffffff
+            ? numericId.toString(16).padStart(8, '0') : '';
+    const label = String(shortName || '').trim() || id.slice(-4) || '?';
+    const color = boardAvatarColor(id);
+    const length = MeshReactions.singleEmoji(label) ? 1 : Array.from(label).length;
+    const scale = length <= 1 ? 0.6 : length === 2 ? 0.46 : length === 3 ? 0.37 : 0.3;
+    return `<span class="identity-avatar ${length > 2 ? 'identity-avatar--compact' : ''}" style="--avatar-color:${color};--avatar-text-color:${getSenderBadgeTextColor(color)};--avatar-label-scale:${scale}" aria-hidden="true">${escapeHtml(label)}</span>`;
 }
 
 function renderBoardPost(message, reactions = []) {
@@ -114,7 +126,7 @@ function renderBoardPost(message, reactions = []) {
     const packet = Number(message.packet_id);
     const reply = packet ? `<button type="button" class="board-post-reply" onclick="startReply(${packet})" aria-label="Reply to ${escapeHtml(sender)}">${boardIcon('reply')}<span>Reply</span></button>` : '';
     const unread = BoardUnread.isUnread(message);
-    return `<div class="board-post ${unread ? 'board-post-unread' : ''}" ${unread ? `data-unread-post="${escapeHtml(BoardUnread.id(message))}"` : ''}><span class="identity-avatar" style="--avatar-color:${boardAvatarColor(identity)}" aria-hidden="true">${escapeHtml(String(sender || '?').trim().charAt(0).toUpperCase())}</span><div class="board-post-body"><div class="board-post-heading">${renderMessageSenderLink(message, sender, 'board-post-author')}${unread ? '<span class="post-new-badge">New</span>' : ''}<time class="board-post-time">${escapeHtml(formatTimestamp(message.timestamp))}</time></div><div class="message__content">${renderMessageContentHtml(message.content || '')}</div><div class="board-post-tools">${reply}${renderAckStatusHtml(message)}</div>${renderReactionBubbles(message, reactions)}</div></div>`;
+    return `<div class="board-post ${unread ? 'board-post-unread' : ''}" ${unread ? `data-unread-post="${escapeHtml(BoardUnread.id(message))}"` : ''}>${renderIdentityAvatar(getMessageSenderShortName(message), identity, message.sender_num)}<div class="board-post-body"><div class="board-post-heading">${renderMessageSenderLink(message, sender, 'board-post-author')}${unread ? '<span class="post-new-badge">New</span>' : ''}<time class="board-post-time">${escapeHtml(formatTimestamp(message.timestamp))}</time></div><div class="message__content">${renderMessageContentHtml(message.content || '')}</div><div class="board-post-tools">${reply}${renderAckStatusHtml(message)}</div>${renderReactionBubbles(message, reactions)}</div></div>`;
 }
 
 async function roomRequest(path, method = 'GET', data) {
@@ -307,7 +319,7 @@ function renderBoardNodes() {
     if (!target) return;
     document.getElementById('boardNodeCount').textContent = meshNodes.length;
     const nodes = sortFavoriteNodes(meshNodes.filter(n => `${n.long_name} ${n.short_name} ${n.node_id}`.toLowerCase().includes(nodeBoardQuery)));
-    target.innerHTML = nodes.map(node => `<div class="rail-node" data-board-node="${Number(node.node_num)}"><span class="identity-avatar" style="--avatar-color:${boardAvatarColor(node.node_id || node.node_num)}" aria-hidden="true">${escapeHtml(getNodeDisplayLabel(node).trim().charAt(0).toUpperCase())}</span><div class="rail-node-body"><div class="rail-node-heading"><button type="button" class="rail-node-name rail-node-link" data-board-node="${Number(node.node_num)}" aria-label="View ${escapeHtml(getNodeDisplayLabel(node))} in node directory">${escapeHtml(getNodeDisplayLabel(node))}</button>${renderNodeFavorite(node)}</div><div class="rail-node-meta" title="${escapeHtml(String(node.node_id || ''))}">${escapeHtml(String(node.node_id || '').replace(/^!/, ''))}</div><div class="rail-node-actions"><button type="button" data-board-dm="${Number(node.node_num)}">DM</button><button type="button" data-board-invite="${Number(node.node_num)}">Invite to room</button></div></div></div>`).join('') || `<p class="rail-empty">${currentProfile ? (nodeBoardQuery ? 'No matching nodes.' : 'Listening for nodes…') : 'Activate a profile to discover nodes.'}</p>`;
+    target.innerHTML = nodes.map(node => `<div class="rail-node" data-board-node="${Number(node.node_num)}">${renderIdentityAvatar(node.short_name, node.node_id, node.node_num)}<div class="rail-node-body"><div class="rail-node-heading"><button type="button" class="rail-node-name rail-node-link" data-board-node="${Number(node.node_num)}" aria-label="View ${escapeHtml(getNodeDisplayLabel(node))} in node directory">${escapeHtml(getNodeDisplayLabel(node))}</button>${renderNodeFavorite(node)}</div><div class="rail-node-meta" title="${escapeHtml(String(node.node_id || ''))}">${escapeHtml(String(node.node_id || '').replace(/^!/, ''))}</div><div class="rail-node-actions"><button type="button" data-board-dm="${Number(node.node_num)}">DM</button><button type="button" data-board-invite="${Number(node.node_num)}">Invite to room</button></div></div></div>`).join('') || `<p class="rail-empty">${currentProfile ? (nodeBoardQuery ? 'No matching nodes.' : 'Listening for nodes…') : 'Activate a profile to discover nodes.'}</p>`;
 
 }
 

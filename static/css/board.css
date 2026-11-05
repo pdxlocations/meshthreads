@@ -897,3 +897,20 @@ button.message-reaction:hover, button.message-reaction-unread { border-color: va
 .admin-editor input { width: 100%; min-width: 0; font-size: 16px; }
 #adminEditorError { color: var(--danger, #cf6871); }
 .admin-editor .admin-actions { justify-content: flex-end; }
+
+/* Short names and emoji need enough room to remain legible in identity circles. */
+.identity-avatar {
+  --avatar-size: 32px;
+  color: var(--avatar-text-color, #ffffff);
+  font-size: calc(var(--avatar-size) * var(--avatar-label-scale, 0.6));
+  font-weight: 600;
+  white-space: nowrap;
+}
+.identity-avatar--compact { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.board-post > .identity-avatar { --avatar-size: 28px; }
+.board-post > .identity-avatar, .rail-node > .identity-avatar {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  flex-basis: var(--avatar-size);
+  font-size: calc(var(--avatar-size) * var(--avatar-label-scale, 0.6));
+}

@@ -2595,12 +2595,16 @@ function getChannelThreads() {
 function getMessageSenderShortName(message) {
     if (!message) return '';
 
+    const senderId = getMessageSenderNodeId(message);
+    const nodeNum = Number(message.sender_num) || (/^![0-9a-f]{8}$/i.test(senderId) ? parseInt(senderId.slice(1), 16) : 0);
+    const knownShortName = String(getNodeByNum(nodeNum)?.short_name || '').trim();
+    if (knownShortName) return knownShortName;
     const explicitShortName = (message.sender_short_name || '').trim();
     if (explicitShortName) {
         return explicitShortName;
     }
 
-    if (currentProfile && message.sender === currentProfile.node_id) {
+    if (currentProfile && (message.sender === currentProfile.node_id || nodeNum === parseInt(String(currentProfile.node_id || '').replace(/^!/, ''), 16))) {
         return (currentProfile.short_name || '').trim();
     }
 
