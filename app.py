@@ -836,23 +836,29 @@ def _hydrate_message_sender_labels(messages, profile):
     if not mesh_store:
         mesh_store = None
 
+    sender_nodes = {}
+    updated_senders = set()
     for message in messages or []:
         sender_num = message.get("sender_num")
         if sender_num in (None, 0):
             continue
 
-        try:
-            found_node = mesh_store.get_node(int(sender_num)) if mesh_store else None
-        except Exception:
-            found_node = None
+        if sender_num not in sender_nodes:
+            try:
+                sender_nodes[sender_num] = mesh_store.get_node(int(sender_num)) if mesh_store else None
+            except Exception:
+                sender_nodes[sender_num] = None
+        found_node = sender_nodes[sender_num]
         if not found_node:
             continue
 
         preferred_display = found_node.get("long_name") or found_node.get("short_name") or found_node.get("node_id")
         if preferred_display and _message_has_fallback_sender_display(message):
             message["sender_display"] = preferred_display
-            if message.get("direction") == "received" and message.get("channel") is not None:
+            pair = (message.get("channel"), sender_num)
+            if message.get("direction") == "received" and message.get("channel") is not None and pair not in updated_senders:
                 db.update_received_message_sender_display(message.get("channel"), int(sender_num), preferred_display)
+                updated_senders.add(pair)
 
         if found_node.get("short_name"):
             message["sender_short_name"] = found_node.get("short_name")
@@ -863,30 +869,21 @@ def _hydrate_message_sender_labels(messages, profile):
 def _get_chat_payload(profile):
     effective_profile = _effective_profile(profile)
     channel_number = _profile_channel_num(effective_profile)
-    channel_messages = []
+    history = db.get_channel_thread_page(channel_number, effective_profile['id']) if effective_profile and channel_number is not None else None
+    channel_messages = [message for thread in (history or {}).get('threads', []) for message in thread['messages']]
+    # Inactive rooms need just a preview, not their complete message histories.
+    channel_summaries = []
     if effective_profile:
-        # The client renders a channel inbox and maintains unread state for every
-        # configured channel.  Supplying only the selected channel here left an
-        # unread thread without its history after a reload (and it could render
-        # the empty-state copy despite having a badge).  Load each configured
-        # channel so the message collection and unread collection share scope.
-        channel_numbers = _channel_numbers_for_profile(effective_profile)
-        for configured_channel_number in dict.fromkeys(channel_numbers):
-            channel_messages.extend(
-                db.get_messages_for_channel(
-                    configured_channel_number,
-                    profile_id=effective_profile["id"],
-                    limit=None,  # Boards need old roots when a recent reply bumps them.
-                )
-            )
-        # Message rendering is chronological, with the composer anchored below
-        # the list.  Keep the newest message last after combining channels.
-        channel_messages.sort(key=lambda message: message.get("timestamp") or "")
+        for number in dict.fromkeys(_channel_numbers_for_profile(effective_profile)):
+            latest = db.get_messages_for_channel(number, profile_id=effective_profile['id'], limit=1)
+            channel_summaries.extend(latest)
     dm_messages = db.get_dm_messages_for_profile(effective_profile["id"]) if effective_profile else []
     _hydrate_message_sender_labels(channel_messages, effective_profile)
     _hydrate_message_sender_labels(dm_messages, effective_profile)
     return {
         "channel_messages": channel_messages,
+        "channel_history": history,
+        "channel_summaries": channel_summaries,
         "dm_messages": dm_messages,
         "channel_number": channel_number,
         "selected_channel_index": effective_profile.get("selected_channel_index", 0) if effective_profile else 0,
@@ -2653,6 +2650,8 @@ def set_current_profile():
                 "interface_status": _interface_status_for_profile(current_profile),
                 "messages": chat_payload["channel_messages"],
                 "channel_messages": chat_payload["channel_messages"],
+                "channel_history": chat_payload.get("channel_history"),
+                "channel_summaries": chat_payload.get("channel_summaries", []),
                 "dm_messages": chat_payload["dm_messages"],
                 "channel_number": expected_channel,
                 "unread_count": unread_count,
@@ -2752,6 +2751,8 @@ def reconnect_profile():
                 "profile": response_profile,
                 "interface_status": "started",
                 "channel_messages": chat_payload["channel_messages"],
+                "channel_history": chat_payload.get("channel_history"),
+                "channel_summaries": chat_payload.get("channel_summaries", []),
                 "dm_messages": chat_payload["dm_messages"],
                 "channel_number": chat_payload["channel_number"],
                 "selected_channel_index": response_profile.get("selected_channel_index", 0),
@@ -2768,6 +2769,8 @@ def reconnect_profile():
                 "interface_status": "conflict",
                 "warning": f"The active virtual node is currently profile {current_profile_id}. Wait for other users to finish before switching identities.",
                 "channel_messages": chat_payload["channel_messages"],
+                "channel_history": chat_payload.get("channel_history"),
+                "channel_summaries": chat_payload.get("channel_summaries", []),
                 "dm_messages": chat_payload["dm_messages"],
                 "channel_number": chat_payload["channel_number"],
                 "selected_channel_index": response_profile.get("selected_channel_index", 0),
@@ -2781,6 +2784,8 @@ def reconnect_profile():
             "profile": response_profile,
             "interface_status": _interface_status_for_profile(current_profile),
             "channel_messages": chat_payload["channel_messages"],
+            "channel_history": chat_payload.get("channel_history"),
+            "channel_summaries": chat_payload.get("channel_summaries", []),
             "dm_messages": chat_payload["dm_messages"],
             "channel_number": chat_payload["channel_number"],
             "selected_channel_index": response_profile.get("selected_channel_index", 0),
@@ -2811,6 +2816,45 @@ def get_messages():
     chat_payload = _get_chat_payload(current_profile)
     chat_payload.update(_unread_state_for_profile(current_profile))
     return jsonify(chat_payload)
+
+
+@app.route('/api/message-state')
+@login_required
+def message_state():
+    profile = _get_session_profile()
+    if not profile:
+        return jsonify(channel_summaries=[], unread_channel_counts={}, unread_dm_counts={})
+    summaries=[]
+    for number in dict.fromkeys(_channel_numbers_for_profile(profile)):
+        summaries.extend(db.get_messages_for_channel(number,profile_id=profile['id'],limit=1))
+    result={'channel_summaries':summaries,**_unread_state_for_profile(profile)}
+    if request.args.get('include_dms') == '1':
+        result['dm_messages']=db.get_dm_messages_for_profile(profile['id'])
+        _hydrate_message_sender_labels(result['dm_messages'],profile)
+    return jsonify(result)
+
+
+@app.route('/api/channel-history')
+@login_required
+def channel_history():
+    profile = _get_session_profile()
+    if not profile:
+        return jsonify(error='No profile selected'), 400
+    try:
+        index = int(request.args.get('channel_index', '0'))
+        channels = _profile_channels(profile)
+        if not 0 <= index < len(channels):
+            raise ValueError('Channel index out of range.')
+        channel = _channel_number_for_config(channels[index])
+        if request.args.get('packet_id'):
+            page = db.get_channel_thread_for_packet(channel, profile['id'], int(request.args['packet_id']))
+        else:
+            page = db.get_channel_thread_page(channel, profile['id'], cursor=request.args.get('cursor'),
+                    thread_id=request.args.get('thread_id'), after=int(request.args.get('after', '0')))
+        _hydrate_message_sender_labels([m for thread in page['threads'] for m in thread['messages']], _effective_profile(profile, channel_index=index))
+        return jsonify(page)
+    except (ValueError, TypeError) as error:
+        return jsonify(error=str(error)), 400
 
 
 @app.route("/api/channel-read", methods=["POST"])

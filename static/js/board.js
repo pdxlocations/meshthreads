@@ -356,7 +356,7 @@ function renderReplyBranch(node, group) {
     const open = !collapsedMeshThreads.has(threadVisibilityKey(key));
     const count = node.children.length;
     const footer = count ? `<footer class="thread-footer"><button type="button" data-board-toggle="${escapeHtml(key)}" aria-expanded="${open}">${boardIcon(open ? 'down' : 'right')} ${count} ${count === 1 ? 'reply' : 'replies'}</button></footer>` : '';
-    return `<div class="reply-branch" data-reply-packet="${Number(node.message.packet_id) || ''}">${renderBoardPost(node.message, node.reactions)}${footer}<div class="thread-replies ${open ? '' : 'd-none'}">${node.children.map(child => renderReplyBranch(child, group)).join('')}<div class="inline-composer-slot"></div></div></div>`;
+    return `<div class="reply-branch" data-reply-packet="${Number(node.message.packet_id) || ''}">${node.missingParent ? '<div class="orphan-note">Earlier replies have not loaded yet.</div>' : ''}${renderBoardPost(node.message, node.reactions)}${footer}<div class="thread-replies ${open ? '' : 'd-none'}">${node.children.map(child => renderReplyBranch(child, group)).join('')}<div class="inline-composer-slot"></div></div></div>`;
 }
 
 function boardScrollKey() {
@@ -376,12 +376,19 @@ function withBoardScrollPosition(render) {
     }
     const nextKey = boardScrollKey();
     const saved = boardViewScrollPositions.get(nextKey);
+    if (typeof ChannelHistory !== 'undefined' && activeChatTab === 'channel' && renderedBoardScrollKey !== nextKey) {
+        ChannelHistory.setScrollTarget(saved ?? 0);
+    }
+    const anchor = typeof ChannelHistory !== 'undefined' && activeChatTab === 'channel' && renderedBoardScrollKey === nextKey && saved > 0
+        ? ChannelHistory.anchor(container) : null;
     try {
         return render();
     } finally {
         // New chronological DM conversations start at the latest message;
         // all other new views start at the top. Returning views keep their place.
         container.scrollTop = saved ?? (activeChatTab === 'dm' && activeDmTargetNodeNum ? container.scrollHeight : 0);
+        if (anchor) container.scrollTop += ChannelHistory.anchorDelta(container, anchor);
+        if (typeof ChannelHistory !== 'undefined') ChannelHistory.setScrollTarget(null);
         renderedBoardScrollKey = nextKey;
         updateNodesBackToTopVisibility(container);
     }
@@ -408,14 +415,15 @@ renderActiveMessages = function () {
             return;
         }
         container.classList.remove('messages-container--map', 'messages-container--nav-safe');
+        ChannelHistory.ensure();
         const visibleMessages = getVisibleMessages();
         BoardUnread.begin(visibleMessages, getActiveUnreadCount());
         const groups = MeshThreads.groupThreads(visibleMessages);
         const scroll = container.scrollTop;
-        container.innerHTML = groups.length ? groups.map(group => {
+        container.innerHTML = ChannelHistory.windowed(groups, group => {
             const unreadCount = BoardUnread.countUnread(group.messages);
-            return `<article class="board-thread ${unreadCount ? 'board-thread-unread' : ''}" data-thread-key="${escapeHtml(group.key)}">${unreadCount ? `<div class="thread-unread-label" aria-label="${unreadCount} unread messages">${unreadCount} unread</div>` : ''}${group.missing ? '<div class="orphan-note">ORIGINAL MESSAGE NOT IN LOCAL HISTORY</div>' : ''}${renderReplyBranch(MeshThreads.replyTree(group), group)}</article>`;
-        }).join('') : '';
+            return `<article class="board-thread ${unreadCount ? 'board-thread-unread' : ''}" data-thread-key="${escapeHtml(group.key)}">${unreadCount ? `<div class="thread-unread-label" aria-label="${unreadCount} unread messages">${unreadCount} unread</div>` : ''}${group.missing ? '<div class="orphan-note">ORIGINAL MESSAGE NOT IN LOCAL HISTORY</div>' : ''}${renderReplyBranch(MeshThreads.replyTree(group), group)}${ChannelHistory.threadFooter(group)}</article>`;
+        }) + ChannelHistory.footer();
         if (replyingToPacketId) {
             const branch = [...container.querySelectorAll('[data-reply-packet]')].find(el => Number(el.dataset.replyPacket) === Number(replyingToPacketId));
             const slot = branch?.querySelector(':scope > .thread-replies > .inline-composer-slot');
@@ -423,6 +431,7 @@ renderActiveMessages = function () {
         }
         container.scrollTop = scroll;
         BoardUnread.observe(container);
+        ChannelHistory.observe(container);
     }));
 };
 
@@ -734,8 +743,17 @@ updateNodeListFilter = function() {
 
 const boardReactionGroups = new Map();
 function renderReactionBubbles(message, reactions = []) {
-    if (!reactions.length) return '';
-    return `<div class="message-reactions" aria-label="Message reactions">${MeshReactions.aggregate(reactions).map(group => {
+    const groups = MeshReactions.aggregate(reactions);
+    for (const summary of message.reaction_summary || []) {
+        const canonical = value => value.normalize('NFC').replace(/\uFE0F/g, '');
+        let group = groups.find(group => canonical(group.emoji) === canonical(summary.emoji));
+        if (!group) {group = {emoji:summary.emoji,messages:[],senders:[]};groups.push(group);}
+        const senders = new Map(summary.senders.map(sender => [String(sender.sender_num || sender.sender),sender]));
+        for (const sender of group.senders) senders.set(String(sender.sender_num || sender.sender),sender);
+        group.senders = [...senders.values()];
+    }
+    if (!groups.length) return '';
+    return `<div class="message-reactions" aria-label="Message reactions">${groups.map(group => {
         const key = `${message.id || message.packet_id}:${group.emoji}`;
         boardReactionGroups.set(key, group);
         const names = group.senders.map(sender => getMessageSenderDisplayName(sender)).join(', ');

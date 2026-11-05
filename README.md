@@ -16,6 +16,14 @@ Admins can view each profile’s rooms, their primary/secondary order, and key s
 
 Session tracking begins with this update and persists across restarts. A browser is active when its heartbeat was received in the last 90 seconds. Background tabs count as connected time; gaps without heartbeats count at most 90 seconds, so login time is an estimate. Packet counters cover the current server run. Message totals count retained database messages; shared room receives are counted for each subscribed profile. Password hashes, PSKs, session tokens, and message contents are excluded from admin reports.
 
+## Large channel histories
+
+The board loads the selected room’s 12 most recently active threads instead of downloading every room’s history. Older threads load automatically near the bottom; **Load older threads** is also available. Long threads load 40-message sections with the original, latest message, and a bounded amount of ancestor context. **Load more replies** loads another section; expanded threads also load it when that control approaches the viewport. A small notice identifies ancestry that has not loaded yet.
+
+Only nearby threads are mounted in the page. Loaded history stays cached while navigating, and an active reply composer stays mounted to preserve its draft and focus. Each room keeps its scroll position. Tapback summaries include all known reactors even before every historical reaction row loads. Unread messages retain their unread state until seen; fetching a history page does not mark it read.
+
+Live messages refresh their affected thread and lightweight unread/room previews. A reconnect refreshes the active room’s recent threads; older pages remain available. SQLite maintains a thread/activity index as messages arrive and builds it automatically for existing history during startup. The upgrade preserves messages and profile-specific history-clearing boundaries. DMs retain their existing bounded 200-message history.
+
 ## Screenshots
 
 Actual app captures using fictional sample messages, nodes, and telemetry. The sample mesh transport is stopped; these images do not represent live radio delivery.

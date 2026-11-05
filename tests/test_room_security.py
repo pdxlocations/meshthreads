@@ -63,5 +63,26 @@ class RoomSecurity(unittest.TestCase):
             self.db.store_message(str(packet), packet_id=packet, sender_num=42,
                                   content='post', channel=channel, reply_packet_id=1 if packet == 102 else None)
         payload = self.client.get('/api/messages').json
-        self.assertEqual(len(payload['channel_messages']), 102)
+        self.assertLess(len(payload['channel_messages']), 102)
+        self.assertEqual(len(payload['channel_history']['threads']), 12)
+        self.assertTrue(payload['channel_history']['has_more'])
         self.assertTrue(any(m['packet_id'] == 1 for m in payload['channel_messages']))
+
+    def test_history_api_is_scoped_validates_cursors_and_paginates(self):
+        profile=self.db.get_profile(self.profile_id)
+        channel=self.module._channel_number_for_config(profile['channels'][0])
+        for n in range(1,35):
+            self.db.store_message(str(n),packet_id=n,sender_num=8,content='Stored message',channel=channel)
+        first=self.client.get('/api/channel-history?channel_index=0')
+        self.assertEqual(first.status_code,200)
+        self.assertEqual(len(first.json['threads']),12)
+        cursor=first.json['next_cursor']
+        second=self.client.get('/api/channel-history',query_string={'channel_index':0,'cursor':cursor})
+        self.assertEqual(second.status_code,200)
+        self.assertTrue(set(t['thread_id'] for t in first.json['threads']).isdisjoint(t['thread_id'] for t in second.json['threads']))
+        self.assertEqual(self.client.get('/api/channel-history?channel_index=1').status_code,400)
+        self.assertEqual(self.client.get('/api/channel-history?cursor=invalid').status_code,400)
+        self.assertEqual(self.module.app.test_client().get('/api/channel-history').status_code,401)
+        state=self.client.get('/api/message-state').json
+        self.assertNotIn('channel_messages',state)
+        self.assertEqual(len(state['channel_summaries']),1)

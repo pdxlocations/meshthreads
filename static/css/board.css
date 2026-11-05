@@ -914,3 +914,7 @@ button.message-reaction:hover, button.message-reaction-unread { border-color: va
   flex-basis: var(--avatar-size);
   font-size: calc(var(--avatar-size) * var(--avatar-label-scale, 0.6));
 }
+
+.history-more, .history-thread-more { padding: 8px 0; text-align: center; color: var(--muted); font-size: 13px; }
+.history-more button, .history-thread-more button { color: var(--amber); }
+.thread-placeholder { flex-shrink: 0; pointer-events: none; }

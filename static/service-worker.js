@@ -1,4 +1,4 @@
-const STATIC_CACHE = "meshthreads-static-v60";
+const STATIC_CACHE = "meshthreads-static-v61";
 const STATIC_ASSETS = [
   "/static/manifest.json",
   "/static/images/meshthreads.svg",
@@ -13,6 +13,7 @@ const STATIC_ASSETS = [
   "/static/js/board-unread.js",
   "/static/js/node-panels.js",
   "/static/js/threads.js",
+  "/static/js/channel-history.js",
   "/static/js/reactions.js",
   "/static/js/theme.js",
   "/static/js/session-activity.js",

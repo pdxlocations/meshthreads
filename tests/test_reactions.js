@@ -76,3 +76,16 @@ test('the DM invitation wrapper forwards attached reactions to the message rende
     context.renderMessageHtml(msg(1,'hello',null,{message_type:'dm'}),attached);
     assert.equal(received,attached);
 });
+
+test('paged reaction summaries keep all reactors and merge live tapbacks without duplicates',()=>{
+    const code=fs.readFileSync(path.join(__dirname,'../static/js/board.js'),'utf8');
+    const start=code.indexOf('const boardReactionGroups = new Map();'),end=code.indexOf('\nfunction showReactionSenders',start);
+    const context=vm.createContext({MeshReactions:reactions,escapeHtml:String,getMessageSenderDisplayName:m=>m.sender_display,BoardUnread:{isUnread:()=>false,id:m=>m.id}});
+    vm.runInContext(code.slice(start,end),context);
+    const original=msg(1,'Root');
+    original.reaction_summary=[{emoji:'❤️',senders:[{sender_num:7,sender_display:'Cedar'},{sender_num:8,sender_display:'Riverbank'}]}];
+    const html=context.renderReactionBubbles(original,[msg(2,'❤',1,{sender_num:8,sender_display:'Riverbank'})]);
+    assert.match(html,/reaction-count">2</);
+    assert.equal((html.match(/data-reaction-group=/g)||[]).length,1);
+    assert.match(html,/Cedar, Riverbank/);
+});

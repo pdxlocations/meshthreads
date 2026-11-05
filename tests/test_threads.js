@@ -56,3 +56,27 @@ test('reply trees keep orphan replies and cyclic ancestry visible exactly once',
         assert.equal(visited.size, messages.length);
     }
 });
+
+test('server activity keeps a partially loaded old thread above newer roots',()=>{
+    const messages=[
+        {id:'old',packet_id:1,channel:15,thread_id:'1',timestamp:1,thread_activity:5000,thread_last_id:30},
+        {id:'new',packet_id:2,channel:15,thread_id:'2',timestamp:3,thread_activity:3000,thread_last_id:20},
+        {id:'reply',packet_id:3,reply_packet_id:1,channel:15,timestamp:4},
+    ];
+    const api=require('../static/js/threads.js');
+    const groups=api.groupThreads(messages);
+    assert.equal(groups.length,2);
+    assert.equal(groups[0].root.id,'old');
+    assert.equal(groups[0].messages.length,2);
+});
+
+test('later reply pages retain chronological order when messages share a timestamp',()=>{
+    const api=require('../static/js/threads.js');
+    const messages=[
+        {id:'root',packet_id:1,channel:15,thread_id:'1',timestamp:1,history_row_id:1},
+        {id:'last',packet_id:100,reply_packet_id:1,channel:15,thread_id:'1',timestamp:1,history_row_id:100},
+        {id:'middle',packet_id:40,reply_packet_id:1,channel:15,thread_id:'1',timestamp:1,history_row_id:40},
+    ];
+    const group=api.groupThreads(messages)[0];
+    assert.deepEqual(api.replyTree(group).children.map(node=>node.message.id),['middle','last']);
+});

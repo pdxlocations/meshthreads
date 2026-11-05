@@ -9,7 +9,7 @@ const BoardUnread = (() => {
     function select(messages, count) {
         if (!(Number(count) > 0)) return [];
         return [...messages].filter(message => (message.direction || 'received') === 'received')
-            .sort((a, b) => (parseTimestampValue(a.timestamp)?.getTime() || 0) - (parseTimestampValue(b.timestamp)?.getTime() || 0)).slice(-Math.max(0, Number(count) || 0));
+            .sort((a, b) => (parseTimestampValue(a.timestamp)?.getTime() || 0) - (parseTimestampValue(b.timestamp)?.getTime() || 0) || (a.history_row_id ?? Number.MAX_SAFE_INTEGER) - (b.history_row_id ?? Number.MAX_SAFE_INTEGER)).slice(-Math.max(0, Number(count) || 0));
     }
     function stop() {
         observer?.disconnect(); observer = null;

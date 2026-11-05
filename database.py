@@ -3,6 +3,7 @@
 import sqlite3
 from administration import Administration, initialize_admin_schema
 from message_reactions import is_emoji_reply
+from thread_history import ThreadHistory, initialize_thread_history, index_message
 from runtime_files import database_connection
 import json
 from datetime import datetime, timezone
@@ -15,7 +16,7 @@ logger = get_logger("meshthreads.db")
 print = make_log_print(logger)
 
 
-class Database(Administration):
+class Database(Administration, ThreadHistory):
     def __init__(self, db_path: str = "firefly.db"):
         self.db_path = db_path
         self.init_database()
@@ -200,6 +201,7 @@ class Database(Administration):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_target_node ON messages (target_node_num)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages (timestamp DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_channel_timestamp ON messages (channel, timestamp DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_channel_latest ON messages (channel, timestamp DESC, id DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_profile_last_seen ON profile_last_seen (profile_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_profile_channel_clears ON profile_channel_clears (profile_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_profile_dm_last_seen ON profile_dm_last_seen (profile_id)")
@@ -210,6 +212,7 @@ class Database(Administration):
             except sqlite3.IntegrityError as e:
                 print(f"[DB] Could not create unique node_id index: {e}")
 
+            initialize_thread_history(conn)
             self._drop_legacy_node_tables(conn)
             
             conn.commit()
@@ -683,7 +686,7 @@ class Database(Administration):
         """Store a message by channel (accessible to any profile using that channel)"""
         try:
             with database_connection(self.db_path) as conn:
-                conn.execute("""
+                cursor = conn.execute("""
                     INSERT INTO messages 
                     (message_id, packet_id, sender_num, sender_display, 
                      content, sender_ip, direction, channel, message_type, reply_packet_id, target_node_num,
@@ -694,6 +697,9 @@ class Database(Administration):
                      owner_profile_id, hop_limit, hop_start, rx_snr, rx_rssi,
                      int(bool(ack_requested)), ack_status, ack_error, ack_updated_at,
                      int(is_emoji_reply(content, reply_packet_id, is_emoji))))
+                if message_type in (None, 'channel'):
+                    row=conn.execute('SELECT id,channel,packet_id,reply_packet_id,timestamp FROM messages WHERE id=?',(cursor.lastrowid,)).fetchone()
+                    index_message(conn,row)
                 conn.commit()
                 return True
         except Exception as e:
@@ -821,7 +827,7 @@ class Database(Administration):
                     clear_ts_expr=self._sqlite_ts_expr("?"),
                 )
                 params.append(clear_state["cleared_before_timestamp"])
-            query += " ORDER BY m.timestamp DESC"
+            query += " ORDER BY m.timestamp DESC, m.id DESC"
             if limit is not None:
                 query += " LIMIT ?"
                 params.append(int(limit))

@@ -1892,7 +1892,10 @@ function mergeMessageSnapshot(snapshot, current, beforeRequest) {
     // A response can predate a Socket.IO message or ACK update received while
     // the request was in flight. Keep those events until history catches up.
     for (const message of current) {
-        if (beforeRequest.get(message.id) !== message) upsertMessage(merged, message);
+        if (beforeRequest.get(message.id) !== message) {
+            const stored = merged.find(item => item.id === message.id);
+            upsertMessage(merged, stored ? {...stored, ...message} : message);
+        }
     }
     return merged;
 }
@@ -1901,13 +1904,30 @@ function applyMessageSnapshot(payload, request) {
     if (request.id !== messageSnapshotRequestId || request.profile !== currentProfile) return false;
     const channels = Array.isArray(payload) ? payload : (payload.channel_messages || []);
     const dms = Array.isArray(payload) ? [] : (payload.dm_messages || []);
-    channelMessages = mergeMessageSnapshot(channels, channelMessages, request.channelMessages);
+    if (payload.channel_history && typeof ChannelHistory !== 'undefined') {
+        const number = Number(payload.channel_history.channel);
+        const others = channelMessages.filter(message => Number(message.channel) !== number);
+        const current = channelMessages.filter(message => Number(message.channel) === number);
+        const merged = mergeMessageSnapshot(channels, current, request.channelMessages);
+        if (request.keepHistory) {
+            const retained = new Map(current.map(message => [message.id, message]));
+            for (const message of merged) retained.set(message.id, message);
+            channelMessages = [...others, ...retained.values()];
+        } else channelMessages = [...others, ...merged];
+        ChannelHistory.accept(payload.channel_history, !request.keepHistory);
+        ChannelHistory.acceptSummaries(payload.channel_summaries);
+    } else {
+        channelMessages = mergeMessageSnapshot(channels, channelMessages, request.channelMessages);
+    }
     dmMessages = mergeMessageSnapshot(dms, dmMessages, request.dmMessages);
     return true;
 }
 
-async function loadMessages(channelIndex = activeChannelIndex) {
+async function loadMessages(channelIndex = activeChannelIndex, resetHistory = false) {
     const snapshotRequest = beginMessageSnapshot();
+    if (typeof ChannelHistory !== 'undefined') {
+        snapshotRequest.keepHistory = !resetHistory && ChannelHistory.state(getChannelNumberByIndex(channelIndex)).loaded;
+    }
     try {
         const query = (channelIndex === null || channelIndex === undefined)
             ? ''
@@ -1929,8 +1949,15 @@ async function loadMessages(channelIndex = activeChannelIndex) {
     }
 }
 
-async function refreshThreadStateSnapshot() {
+async function refreshThreadStateSnapshot(refreshHistory = true) {
     if (!currentProfile) return;
+    if (typeof ChannelHistory !== 'undefined') {
+        await ChannelHistory.refreshState();
+        if (refreshHistory && activeChatTab === 'channel') await ChannelHistory.load();
+        renderActiveMessages();
+        updateComposerState();
+        return;
+    }
     const snapshotRequest = beginMessageSnapshot();
 
     try {
@@ -1958,7 +1985,7 @@ function scheduleThreadStateRefresh() {
 
     pendingThreadStateRefresh = window.setTimeout(async () => {
         pendingThreadStateRefresh = null;
-        await refreshThreadStateSnapshot();
+        await refreshThreadStateSnapshot(false);
     }, 120);
 }
 
@@ -2572,7 +2599,7 @@ function renderChannelThreadList(container) {
 function getChannelThreads() {
     return getProfileChannels().map((channel, index) => {
         const channelNumber = getChannelNumberByIndex(index);
-        let latestMessage = null;
+        let latestMessage = typeof ChannelHistory !== 'undefined' ? ChannelHistory.summary(channelNumber) || null : null;
 
         if (channelNumber !== null) {
             channelMessages.forEach(message => {
@@ -2877,7 +2904,7 @@ async function deleteProfileChannelThread(profileId, channelIndex, channelLabel)
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
 
         if (currentProfile && currentProfile.id === profileId) {
-            await loadMessages(activeChannelIndex);
+            await loadMessages(activeChannelIndex, true);
             applyUnreadState(data);
             renderActiveMessages();
             updateComposerState();
@@ -3837,6 +3864,7 @@ function renderMessageHtml(message, reactions = []) {
 }
 
 function applyMessageUpdate(message) {
+    if (typeof ChannelHistory !== 'undefined') ChannelHistory.noteMessage(message);
     const messageType = message.message_type || 'channel';
     if (messageType === 'dm') {
         upsertMessage(dmMessages, message);
@@ -3849,6 +3877,7 @@ function applyMessageUpdate(message) {
 }
 
 function addIncomingMessage(message) {
+    if (typeof ChannelHistory !== 'undefined') ChannelHistory.noteMessage(message);
     const messageType = message.message_type || 'channel';
     const isOwnMessage = Boolean(
         ((message.direction || '').toLowerCase() === 'sent')
@@ -3970,6 +3999,10 @@ async function setProfile(event) {
 
         currentProfile = data.profile || null;
         channelMessages = data.channel_messages || data.messages || [];
+        if (typeof ChannelHistory !== 'undefined') {
+            ChannelHistory.accept(data.channel_history, true);
+            ChannelHistory.acceptSummaries(data.channel_summaries);
+        }
         dmMessages = data.dm_messages || [];
         activeChannelIndex = Number.isInteger(data.selected_channel_index) ? data.selected_channel_index : 0;
         activeDmTargetNodeNum = null;
@@ -4647,6 +4680,7 @@ function restoreMarkdownTokens(html, tokenStore, prefix) {
 <script src="{{ url_for('static', filename='js/threads.js') }}"></script>
 <script src="{{ url_for('static', filename='js/node-panels.js') }}"></script>
 <script src="{{ url_for('static', filename='js/board-unread.js') }}"></script>
+<script src="{{ url_for('static', filename='js/channel-history.js') }}"></script>
 <script src="{{ url_for('static', filename='js/board.js') }}"></script>
 
 {% endblock %}

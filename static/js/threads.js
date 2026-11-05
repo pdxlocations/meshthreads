@@ -1,7 +1,7 @@
 /* Pure thread grouping: follow radio reply IDs, tolerate missing ancestors and cycles. */
 (function (root) {
     function groupThreads(messages) {
-        const sorted = [...messages].sort((a, b) => time(a) - time(b));
+        const sorted = [...messages].sort((a, b) => time(a) - time(b) || (a.history_row_id ?? Number.MAX_SAFE_INTEGER) - (b.history_row_id ?? Number.MAX_SAFE_INTEGER));
         const byPacket = new Map(sorted.filter(m => m.packet_id).map(m => [String(m.packet_id), m]));
         const index = new Map(sorted.map((m, i) => [m, i]));
         const groups = new Map();
@@ -22,14 +22,16 @@
                 parent = next;
             }
             // Orphan replies to the same absent packet still belong together.
-            const key = parent.reply_packet_id && !byPacket.has(String(parent.reply_packet_id))
+            const threadId = message.thread_id ?? parent.thread_id;
+            const key = threadId !== undefined ? `server:${message.channel}:${threadId}` : parent.reply_packet_id && !byPacket.has(String(parent.reply_packet_id))
                 ? `missing:${parent.reply_packet_id}` : `root:${parent.id || (parent.packet_id ? `packet:${parent.packet_id}:${parent.sender_num || parent.sender || ""}` : index.get(parent))}`;
             if (!groups.has(key)) groups.set(key, {key, root: parent, messages: [], activity: 0, missing: key.startsWith('missing:')});
             const group = groups.get(key);
             group.messages.push(message);
-            group.activity = Math.max(group.activity, time(message));
+            group.activity = Math.max(group.activity, time(message), Number(message.thread_activity) || 0);
+            group.activityRow = Math.max(group.activityRow || 0, Number(message.thread_last_id) || 0);
         }
-        return [...groups.values()].sort((a, b) => b.activity - a.activity);
+        return [...groups.values()].sort((a, b) => b.activity - a.activity || b.activityRow - a.activityRow);
     }
     function replyTree(group) {
         const reactions = typeof module !== 'undefined' && module.exports ? require('./reactions.js') : root.MeshReactions;
@@ -45,6 +47,7 @@
                 skipped.add(parentMessage);
                 parentMessage = allPackets.get(String(parentMessage.reply_packet_id));
             }
+            node.missingParent = node.message.thread_id !== undefined && Boolean(node.message.reply_packet_id && !parentMessage);
             let parent = nodes.get(parentMessage) || treeRoot;
             // Broken ancestry and radio reply cycles stay visible without creating DOM cycles.
             for (let ancestor = parent; ancestor; ancestor = ancestor.parent) {

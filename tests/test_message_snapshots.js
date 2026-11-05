@@ -74,3 +74,24 @@ test('history still removes old records when no live update arrived', async () =
     await pending;
     assert.equal(c.channelMessages.length, 0);
 });
+
+test('paged refresh retains loaded older threads and other rooms',async()=>{
+    const {context:c,requests}=fixture();
+    c.channelMessages=[{id:'older-page',channel:15},{id:'other-room',channel:75}];
+    c.getChannelNumberByIndex=()=>15;
+    c.ChannelHistory={state:()=>({loaded:true}),accept(){},acceptSummaries(){}};
+    const pending=c.loadMessages();
+    requests[0]({channel_messages:[{id:'head',channel:15}],channel_history:{channel:15,threads:[]}});
+    await pending;
+    assert.deepEqual(Array.from(c.channelMessages,m=>m.id).sort(),['head','older-page','other-room']);
+});
+test('explicit history reset clears old pages only in the affected room',async()=>{
+    const {context:c,requests}=fixture();
+    c.channelMessages=[{id:'cleared',channel:15},{id:'other-room',channel:75}];
+    c.getChannelNumberByIndex=()=>15;
+    c.ChannelHistory={state:()=>({loaded:true}),accept(){},acceptSummaries(){}};
+    const pending=c.loadMessages(0,true);
+    requests[0]({channel_messages:[],channel_history:{channel:15,threads:[]}});
+    await pending;
+    assert.deepEqual(Array.from(c.channelMessages,m=>m.id),['other-room']);
+});
